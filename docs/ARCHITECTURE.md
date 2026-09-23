@@ -153,10 +153,9 @@ Never serialize secrets into configuration fields.
 
 ### Starting URLs
 
-For v0.1, discover URLs from:
+`compareSites()` crawls the source site first, then the target site. The target crawl is seeded with its root and every source URL mapped onto the target origin, before it follows links found only on the target. That keeps a source page from being reported missing when the target has the URL but does not link it from the home page. Target-only pages are not paired for SC001–SC006.
 
-1. the supplied root URL
-2. internal links found while crawling
+The phases do not overlap, so the configured concurrency is the simultaneous request limit.
 
 Sitemap coverage (SC008) is a separate fetch and comparison. It does not add sitemap URLs to the HTML crawl.
 

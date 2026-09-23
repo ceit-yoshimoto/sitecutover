@@ -38,23 +38,28 @@ Validate inputs before network access.
 
 ## Exit codes
 
-- `0`: audit completed and did not meet the configured failure threshold
-- `1`: audit completed and findings met/exceeded the failure threshold
-- `2`: invalid configuration or runtime failure prevented a valid audit
+- `0`: audit completed and did not meet the configured failure threshold. Info findings alone do not meet `error` or `warning`.
+- `1`: audit completed and findings met the failure threshold. `--fail-on error` fails when there is at least one error. `--fail-on warning` fails when there is at least one warning or error. `--fail-on never` stays `0`.
+- `2`: invalid configuration, usage error, report file write failure, or a runtime failure that cannot produce an audit. A source root that cannot be fetched is this case, because there is no comparison baseline. A target 404, or a target request failure that can be recorded as a finding, stays in the audit and uses `0` or `1`.
 
 Do not use many rule-specific exit codes.
 
 ## Page discovery
 
-For each site:
+Comparison is source-driven. Network phases run one after another, so `--concurrency` is the maximum number of simultaneous requests, including extra SC007 link checks.
 
-1. enqueue root URL
-2. inspect sitemap location(s)
-3. crawl internal links breadth-first until no URLs remain or `max-pages` is reached
-4. deduplicate normalized URLs
-5. never recursively crawl external origins
+1. Validate configuration before any request.
+2. Crawl the source origin from its root, following same-origin links until `--max-pages`.
+3. Stop when the source root itself cannot be fetched. That is exit `2`, not a finding.
+4. Map each fetched source URL onto the target origin. Path and query stay the same.
+5. Crawl the target origin. Its root and the mapped source URLs are seeds. They are deduplicated and fetched before links discovered only on the target. A mapped URL is fetched even when the target home page does not link it. A URL already fetched is not fetched again.
+6. Any crawl budget still left may follow target-only links. Those pages are not paired for SC001–SC006.
+7. Pair each source page with its mapped target snapshot. A failed target fetch stays in the pair.
+8. Run SC007 on the target crawl. Run SC008 unless `--no-sitemap`. `--no-sitemap` does not request `robots.txt` or sitemap URLs.
 
-The implementation may optimize by using source discovery as the primary path set for target comparisons, but target-only sitemap differences must still be reportable.
+`pagesExamined` is the number of source-driven page pairs evaluated by SC001–SC006. `sourcePages` and `targetPages` are the numbers of pages each crawl fetched.
+
+Sitemap coverage remains a separate fetch. It does not add sitemap URLs to the HTML crawl. Target-only sitemap differences are still reportable through SC008.
 
 ## URL pairing
 
@@ -193,7 +198,7 @@ Coverage uses origin-root mapping: the source path and query are kept, and only 
 
 Each origin fetches at most 50 sitemap documents by default, with a hard cap of 200. `robots.txt` is one extra request and does not spend that budget. Redirect hops and timeouts use the shared fetch limits. A sitemap index cycle stops because each URL is visited once. When the budget is exhausted, remaining discovered sitemap URLs are not requested. The finding records the full unchecked count and a deterministic sample of at most 100 URLs, in discovery order. `uncheckedUrlsTruncated` is true when the sample is shorter than the count.
 
-v0.1 does not decompress `.xml.gz` and does not remap paths. The `compare` command does not run this check yet.
+v0.1 does not decompress `.xml.gz` and does not remap paths. `compare` runs this check unless `--no-sitemap` is set. The sitemap document limit stays an internal default of 50 and is not a CLI option.
 
 ## robots.txt
 
@@ -201,7 +206,9 @@ v0.1 fetches `/robots.txt` only to read `Sitemap:` directives for SC008. A 2xx b
 
 ## Output requirements
 
-Library reporters turn one `AuditReport` into console, JSON, or Markdown text. They do not audit, fetch, or write to the terminal. The `compare` command does not call them yet.
+`compare` renders the audit with `renderReport()`. `--format` selects console, JSON, or Markdown. With no `--output`, the rendered report is written to stdout. With `--output`, it is written only to that file. A write failure is explained on stderr, without the report body, and the process exits `2`.
+
+The reporter functions do not audit, fetch, or write to the terminal.
 
 Every format includes tool version, source and target origins, audit timestamp, pages examined, source and target page counts, error/warning/info counts, and each finding's rule ID, severity, path, source URL, target URL, referrers, message, and help when those fields exist. Finding order is the order on the report.
 

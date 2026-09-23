@@ -26,6 +26,11 @@ export interface CrawlOptions {
   concurrency?: number;
   timeoutMs?: number;
   maxRedirectHops?: number;
+  /**
+   * Same-origin URLs fetched before links discovered during the crawl.
+   * The root URL is always first. Later seeds are deduplicated against it.
+   */
+  seedUrls?: readonly string[];
 }
 
 export interface CrawlPage {
@@ -61,6 +66,17 @@ export async function crawlSite(options: CrawlOptions): Promise<CrawlResult> {
   const origin = new URL(root).origin;
   const queue = [root];
   const seen = new Set<string>([root]);
+  for (const seed of options.seedUrls ?? []) {
+    const normalized = normalizeHttpUrl(seed);
+    if (normalized === null || seen.has(normalized) || seen.size >= settings.maxPages) {
+      continue;
+    }
+    if (new URL(normalized).origin !== origin) {
+      continue;
+    }
+    seen.add(normalized);
+    queue.push(normalized);
+  }
   const pages: Array<CrawlPage | undefined> = [];
   let cursor = 0;
   let active = 0;

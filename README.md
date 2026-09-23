@@ -24,15 +24,17 @@ Website cutovers often fail in small but expensive ways:
 
 These checks are easy to perform individually and easy to forget under launch pressure. `sitecutover` aims to make them repeatable, scriptable, and CI-friendly.
 
-## Planned v0.1
+## Usage
+
+The package is still private and is not published. From a local build:
 
 ```bash
-sitecutover compare \
+node dist/cli/main.js compare \
   --from https://old.example.com \
   --to https://new.example.com
 ```
 
-Expected output shape, produced by the library reporters. `compare` does not call them yet:
+`--from` and `--to` are origin roots. The audit crawls the source site, fetches each discovered path on the target even when the target does not link it, then runs SC001–SC008. Console output looks like this:
 
 ```text
 sitecutover 0.0.0
@@ -55,13 +57,13 @@ ERROR SC001 /foo/
   Help: Restore the target page or add a redirect.
 ```
 
-Planned CLI formats, once `compare` exists:
-
 ```bash
-sitecutover compare --from ... --to ... --format console
-sitecutover compare --from ... --to ... --format json > report.json
-sitecutover compare --from ... --to ... --format markdown > report.md
+node dist/cli/main.js compare --from https://old.example.com/ --to https://new.example.com/ --format console
+node dist/cli/main.js compare --from https://old.example.com/ --to https://new.example.com/ --format json
+node dist/cli/main.js compare --from https://old.example.com/ --to https://new.example.com/ --format markdown --output report.md
 ```
+
+`--output` writes the report to that file and does not also print it. Omit `--output` to print the report on stdout.
 
 ## MVP checks
 
@@ -124,7 +126,7 @@ Those may be added later as optional modules where they clearly support migratio
 
 Node.js 24 or newer is required (`.nvmrc`).
 
-Library code currently covers the domain model, read-only fetching, same-origin crawling, HTML metadata, source/target pairing, page rules SC001–SC008, and console, JSON, and Markdown reporters. The `compare` command is still to be implemented. The package stays private until the v0.1 release.
+`sitecutover compare` crawls a source origin, checks the mapped target URLs, and reports SC001–SC008. The package stays private until the v0.1 release.
 
 Current library rules:
 
