@@ -51,6 +51,17 @@ function failureFinding(side: 'source' | 'target', failure: SitemapFailure): Fin
       help: 'Publish a urlset or sitemapindex document at this URL.',
     });
   }
+  if (failure.reason === 'robots-unreadable') {
+    const detail = unreadableDetail(failure);
+    const suffix = detail === '' ? '' : ` (${detail})`;
+    return createFinding({
+      ruleId: 'SC008',
+      severity: 'warning',
+      message: `${label} robots.txt could not be read; sitemap discovery may be incomplete${suffix}: ${failure.url}`,
+      ...urlField,
+      help: 'Sitemap directives in this robots.txt were not read. Discovery continues with the well-known sitemap paths.',
+    });
+  }
   if (failure.reason === 'cross-origin' || failure.reason === 'cross-origin-redirect') {
     const detail =
       failure.reason === 'cross-origin-redirect' && failure.finalUrl !== undefined
@@ -85,6 +96,9 @@ function unreadableDetail(failure: SitemapFailure): string {
   }
   if (failure.redirectHopLimitExceeded === true) {
     return 'redirect hop limit';
+  }
+  if (failure.finalUrl !== undefined) {
+    return 'cross-origin redirect';
   }
   if (failure.status !== undefined) {
     return `HTTP ${String(failure.status)}`;

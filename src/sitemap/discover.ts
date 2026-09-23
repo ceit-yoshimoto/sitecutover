@@ -17,7 +17,7 @@ const WELL_KNOWN_PATHS = ['/sitemap.xml', '/sitemap_index.xml', '/wp-sitemap.xml
 export type SitemapCandidateSource = 'robots' | 'well-known' | 'index';
 
 export type SitemapFailureReason =
-  'malformed' | 'unreadable' | 'cross-origin' | 'cross-origin-redirect';
+  'malformed' | 'unreadable' | 'cross-origin' | 'cross-origin-redirect' | 'robots-unreadable';
 
 export interface SitemapFailure {
   url: string;
@@ -71,6 +71,10 @@ export async function discoverSitemaps(
 
   const robotsUrl = new URL('/robots.txt', siteOrigin).href;
   const robots = await fetchPage(robotsUrl, settings);
+  const robotsFailure = robotsDiscoveryFailure(robotsUrl, robots);
+  if (robotsFailure !== null) {
+    failures.push(robotsFailure);
+  }
   if (isReadableRobots(robots)) {
     for (const directive of readSitemapDirectives(robots.body ?? '', robotsUrl)) {
       consider(directive, 'robots');
@@ -140,6 +144,13 @@ export async function discoverSitemaps(
   }
 }
 
+function robotsDiscoveryFailure(robotsUrl: string, result: FetchResult): SitemapFailure | null {
+  if (result.status === 404 || result.status === 410 || isReadableRobots(result)) {
+    return null;
+  }
+  return failureFor(robotsUrl, 'robots-unreadable', result);
+}
+
 function isReadableRobots(result: FetchResult): boolean {
   return (
     !result.crossOriginRedirectStopped &&
@@ -199,7 +210,7 @@ function looksLikeSitemap(contentType: string | null): boolean {
 
 function failureFor(
   url: string,
-  reason: Exclude<SitemapFailureReason, 'cross-origin' | 'malformed'>,
+  reason: 'unreadable' | 'cross-origin-redirect' | 'robots-unreadable',
   result: FetchResult,
 ): SitemapFailure {
   const failure: SitemapFailure = { url, reason };
@@ -215,7 +226,7 @@ function failureFor(
   if (result.redirectHopLimitExceeded) {
     failure.redirectHopLimitExceeded = true;
   }
-  if (reason === 'cross-origin-redirect') {
+  if (reason === 'cross-origin-redirect' || result.crossOriginRedirectStopped) {
     failure.finalUrl = result.finalUrl;
   }
   return failure;

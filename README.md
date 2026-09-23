@@ -134,7 +134,7 @@ Current library rules:
 - `/a//b` and `/a/b` stay distinct.
 - HTML metadata and links are parsed from `text/html` and `application/xhtml+xml` only.
 - SC007 checks each unique target internal link once, records referring pages separately from `sourceUrl`, and caps additional fetches at `--max-pages`. A budget finding stores the full unchecked count and at most 100 sample URLs.
-- SC008 compares source sitemap URLs with target sitemap coverage after origin-root mapping. Discovery stays on the configured origin, is bounded per origin, and reads sitemap XML with a sitemap reader rather than the HTML parser. Each sitemap body is limited to 2,000,000 bytes. A well-known sitemap that cannot be fetched is a warning; a 404, 410, or HTML response at a guessed path is not. Unchecked sitemap URLs in a finding are capped at the same 100-URL sample as SC007.
+- SC008 compares source sitemap URLs with target sitemap coverage after origin-root mapping. Discovery stays on the configured origin, is bounded per origin, and reads sitemap XML with a sitemap reader rather than the HTML parser. Each sitemap body is limited to 2,000,000 bytes. A well-known sitemap that cannot be fetched is a warning; a 404, 410, or HTML response at a guessed path is not. An unreadable `robots.txt` is a separate warning, and discovery still continues with the well-known paths. Unchecked sitemap URLs in a finding are capped at the same 100-URL sample as SC007.
 
 ```bash
 npm install

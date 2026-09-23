@@ -179,7 +179,7 @@ Compare sitemap coverage after a migration. This is not a general sitemap crawle
 3. `/sitemap_index.xml`
 4. `/wp-sitemap.xml`
 
-Duplicate candidates are requested once. A missing `robots.txt` is not a finding. A candidate that returns 404 or 410 is not a finding. A well-known path that returns 2xx with a non-sitemap content type, such as HTML, is not a finding.
+Duplicate candidates are requested once. A missing `robots.txt` (404 or 410) is not a finding. A `robots.txt` that cannot be read is an SC008 warning: HTTP 5xx, 401, 403, other non-2xx responses, timeout, network failure, a body over the size limit, a redirect loop, the redirect hop limit, or a cross-origin redirect. The warning says discovery may be incomplete. Well-known sitemap paths are still checked. A candidate that returns 404 or 410 is not a finding. A well-known path that returns 2xx with a non-sitemap content type, such as HTML, is not a finding.
 
 A well-known path that cannot be checked is an SC008 warning. That includes HTTP 5xx, timeout, network failure, a redirect loop, the redirect hop limit, and a body over the sitemap size limit. robots-declared and index-child URLs still warn when a success response is not a sitemap document, and when the response cannot be checked.
 
@@ -197,9 +197,7 @@ v0.1 does not decompress `.xml.gz` and does not remap paths. The `compare` comma
 
 ## robots.txt
 
-v0.1 fetches `/robots.txt` only to read `Sitemap:` directives for SC008. A missing robots.txt is not a finding.
-
-Crawler exclusion from robots.txt is not implemented. Do not describe the crawler as robots-compliant until that behavior exists and is tested.
+v0.1 fetches `/robots.txt` only to read `Sitemap:` directives for SC008. A 2xx body is scanned for those directives. A 404 or 410 is not a finding. When `robots.txt` cannot be read, SC008 warns that sitemap discovery may be incomplete and continues with the well-known sitemap paths. The same body, timeout, redirect, and cross-origin limits apply. Full robots.txt crawl exclusion is not implemented.
 
 ## Output requirements
 

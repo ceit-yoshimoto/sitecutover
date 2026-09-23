@@ -419,10 +419,11 @@ describe('sitemap discovery', () => {
 
       const failed = await discoverSitemaps(refusedOrigin, options());
       expect(failed.pageUrls).toEqual([]);
-      expect(failed.failures.map((failure) => failure.errorCode)).toEqual([
-        'ECONNREFUSED',
-        'ECONNREFUSED',
-        'ECONNREFUSED',
+      expect(failed.failures.map((failure) => [failure.reason, failure.errorCode])).toEqual([
+        ['robots-unreadable', 'ECONNREFUSED'],
+        ['unreadable', 'ECONNREFUSED'],
+        ['unreadable', 'ECONNREFUSED'],
+        ['unreadable', 'ECONNREFUSED'],
       ]);
     } finally {
       await hanging.close();
@@ -508,6 +509,215 @@ describe('sitemap discovery', () => {
   });
 });
 
+describe('robots.txt discovery', () => {
+  it('does not warn when robots.txt is missing', async () => {
+    await withServer(
+      (_request, response) => {
+        textResponse(response, 'missing', 404);
+      },
+      async (server) => {
+        const discovered = await discoverSitemaps(server.origin, options());
+        expect(discovered.failures).toEqual([]);
+      },
+    );
+
+    await withServer(
+      (request, response) => {
+        if (pathnameOf(request) === '/robots.txt') {
+          textResponse(response, 'gone', 410);
+          return;
+        }
+        textResponse(response, 'missing', 404);
+      },
+      async (server) => {
+        const discovered = await discoverSitemaps(server.origin, options());
+        expect(discovered.failures).toEqual([]);
+        expect(discovered.pageUrls).toEqual([]);
+      },
+    );
+  });
+
+  it('warns when robots.txt returns HTTP 500 and still reads a well-known sitemap', async () => {
+    const hits = new Map<string, number>();
+    await withServer(
+      (request, response) => {
+        const path = pathnameOf(request);
+        hits.set(path, (hits.get(path) ?? 0) + 1);
+        const origin = originFrom(request);
+        if (path === '/robots.txt') {
+          textResponse(response, 'unavailable', 500, 'text/plain; charset=utf-8');
+          return;
+        }
+        if (path === '/sitemap.xml') {
+          xmlResponse(response, urlset([`${origin}/from-sitemap/`]));
+          return;
+        }
+        textResponse(response, 'missing', 404);
+      },
+      async (server) => {
+        const discovered = await discoverSitemaps(server.origin, options());
+        expect(hits.get('/sitemap.xml')).toBe(1);
+        expect(discovered.pageUrls).toEqual([`${server.origin}/from-sitemap/`]);
+        expect(discovered.failures).toEqual([
+          {
+            url: `${server.origin}/robots.txt`,
+            reason: 'robots-unreadable',
+            status: 500,
+          },
+        ]);
+      },
+    );
+
+    await withServer(
+      (request, response) => {
+        if (pathnameOf(request) === '/robots.txt') {
+          textResponse(response, 'forbidden', 403, 'text/plain; charset=utf-8');
+          return;
+        }
+        textResponse(response, 'missing', 404);
+      },
+      async (server) => {
+        const discovered = await discoverSitemaps(server.origin, options());
+        expect(discovered.failures).toEqual([
+          {
+            url: `${server.origin}/robots.txt`,
+            reason: 'robots-unreadable',
+            status: 403,
+          },
+        ]);
+      },
+    );
+  });
+
+  it('warns when robots.txt times out and still requests well-known sitemaps', async () => {
+    const hits = new Map<string, number>();
+    await withServer(
+      (request, response) => {
+        const path = pathnameOf(request);
+        hits.set(path, (hits.get(path) ?? 0) + 1);
+        if (path === '/robots.txt') {
+          return;
+        }
+        textResponse(response, 'missing', 404);
+      },
+      async (server) => {
+        const discovered = await discoverSitemaps(server.origin, options(20, { timeoutMs: 200 }));
+        expect(hits.get('/sitemap.xml')).toBe(1);
+        expect(hits.get('/sitemap_index.xml')).toBe(1);
+        expect(hits.get('/wp-sitemap.xml')).toBe(1);
+        expect(discovered.pageUrls).toEqual([]);
+        expect(discovered.failures).toEqual([
+          {
+            url: `${server.origin}/robots.txt`,
+            reason: 'robots-unreadable',
+            errorCode: 'TIMEOUT',
+          },
+        ]);
+      },
+    );
+  });
+
+  it('warns when robots.txt exceeds the body limit and still reads a well-known sitemap', async () => {
+    await withServer(
+      (request, response) => {
+        const path = pathnameOf(request);
+        const origin = originFrom(request);
+        if (path === '/robots.txt') {
+          response.writeHead(200, { 'content-type': 'text/plain; charset=utf-8' });
+          response.end(Buffer.alloc(SITEMAP_MAX_BODY_BYTES + 1));
+          return;
+        }
+        if (path === '/sitemap.xml') {
+          xmlResponse(response, urlset([`${origin}/from-sitemap/`]));
+          return;
+        }
+        textResponse(response, 'missing', 404);
+      },
+      async (server) => {
+        const discovered = await discoverSitemaps(server.origin, options());
+        expect(discovered.pageUrls).toEqual([`${server.origin}/from-sitemap/`]);
+        expect(discovered.failures).toEqual([
+          {
+            url: `${server.origin}/robots.txt`,
+            reason: 'robots-unreadable',
+            status: 200,
+            errorCode: 'BODY_TOO_LARGE',
+          },
+        ]);
+      },
+    );
+  });
+
+  it('warns when robots.txt redirect cannot be completed and still reads a well-known sitemap', async () => {
+    await withServer(
+      (request, response) => {
+        const path = pathnameOf(request);
+        const origin = originFrom(request);
+        if (path === '/robots.txt') {
+          response.writeHead(302, { location: '/robots.txt' });
+          response.end();
+          return;
+        }
+        if (path === '/sitemap.xml') {
+          xmlResponse(response, urlset([`${origin}/from-sitemap/`]));
+          return;
+        }
+        textResponse(response, 'missing', 404);
+      },
+      async (server) => {
+        const discovered = await discoverSitemaps(server.origin, options());
+        expect(discovered.pageUrls).toEqual([`${server.origin}/from-sitemap/`]);
+        expect(discovered.failures).toMatchObject([
+          {
+            url: `${server.origin}/robots.txt`,
+            reason: 'robots-unreadable',
+            redirectLoop: true,
+          },
+        ]);
+      },
+    );
+
+    const externalHits = { count: 0 };
+    const external = await startLocalServer((request, response) => {
+      externalHits.count += 1;
+      expect(request.method).toBe('GET');
+      textResponse(response, 'Sitemap: /secret.xml\n');
+    });
+    try {
+      await withServer(
+        (request, response) => {
+          const path = pathnameOf(request);
+          const origin = originFrom(request);
+          if (path === '/robots.txt') {
+            response.writeHead(302, { location: `${external.origin}/robots.txt` });
+            response.end();
+            return;
+          }
+          if (path === '/sitemap.xml') {
+            xmlResponse(response, urlset([`${origin}/from-sitemap/`]));
+            return;
+          }
+          textResponse(response, 'missing', 404);
+        },
+        async (server) => {
+          const discovered = await discoverSitemaps(server.origin, options());
+          expect(externalHits.count).toBe(0);
+          expect(discovered.pageUrls).toEqual([`${server.origin}/from-sitemap/`]);
+          expect(discovered.failures).toMatchObject([
+            {
+              url: `${server.origin}/robots.txt`,
+              reason: 'robots-unreadable',
+              finalUrl: `${external.origin}/robots.txt`,
+            },
+          ]);
+        },
+      );
+    } finally {
+      await external.close();
+    }
+  });
+});
+
 describe('auditSitemapCoverage', () => {
   it('warns only for source sitemap URLs missing from the target', async () => {
     await withServer(
@@ -549,6 +759,32 @@ describe('auditSitemapCoverage', () => {
             ]);
           },
         );
+      },
+    );
+  });
+
+  it('does not treat an unreadable robots.txt as empty coverage', async () => {
+    await withServer(
+      (request, response) => {
+        if (pathnameOf(request) === '/robots.txt') {
+          textResponse(response, 'unavailable', 500, 'text/plain; charset=utf-8');
+          return;
+        }
+        textResponse(response, 'missing', 404);
+      },
+      async (source) => {
+        await withMissingSitemap(async (target) => {
+          const findings = await auditSitemapCoverage(source.origin, target.origin, options());
+          expect(findings).toMatchObject([
+            {
+              ruleId: 'SC008',
+              severity: 'warning',
+              sourceUrl: `${source.origin}/robots.txt`,
+              message: `Source robots.txt could not be read; sitemap discovery may be incomplete (HTTP 500): ${source.origin}/robots.txt`,
+            },
+          ]);
+          expect(findings[0]?.message.includes('sitemap could not be read')).toBe(false);
+        });
       },
     );
   });
