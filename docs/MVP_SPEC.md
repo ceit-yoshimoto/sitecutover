@@ -70,6 +70,33 @@ https://new.example.net/services/web/?lang=ja
 
 Explicit path remapping is deferred to a later release.
 
+`--from` and `--to` must each be an origin root: `http` or `https`, no credentials, pathname `/`, and no query. A fragment is ignored. A pathname or query is invalid configuration and must fail before any request. v0.1 maps a page by replacing the origin only, so a path prefix such as `https://example.com/blog/` is outside this release.
+
+## URL normalization
+
+Crawl deduplication uses one normalized form:
+
+- drop fragments and default ports
+- preserve trailing slashes (`/docs` and `/docs/` stay distinct)
+- preserve repeated slashes (`/a//b` and `/a/b` stay distinct)
+- preserve query order and repeated keys
+- decode percent-encoding only for unreserved characters
+- do not turn `%2F` into a path separator
+
+Dot segments follow the WHATWG URL parser.
+
+## Redirect safety
+
+Same-origin redirects are followed up to the hop limit.
+
+A `Location` with a different origin is not requested. The received hop and the unfetched `Location` stay on the trace, and SC002 reports that stop. This includes redirects to loopback, link-local, and private addresses, and redirects that change scheme, host, or port.
+
+The document behind a cross-origin redirect is not crawled in v0.1.
+
+## HTML parsing
+
+Metadata and links are parsed with a standards HTML parser, and only from `text/html` or `application/xhtml+xml` responses. XML, plain text, and responses with no content type are not treated as HTML. Script and style contents are not executed or scanned as markup. SVG contents are not treated as HTML elements.
+
 ## Rules
 
 ### SC001 — target-status

@@ -16,7 +16,7 @@ export function pathKeyForUrl(url: string): string | null {
 export function mapUrl(url: string, destinationRoot: string): string | null {
   const path = pathKeyForUrl(url);
   const destination = normalizeHttpUrl(destinationRoot);
-  if (path === null || destination === null) {
+  if (path === null || destination === null || !isOriginRoot(destination)) {
     return null;
   }
   return normalizeHttpUrl(`${new URL(destination).origin}${path}`);
@@ -49,6 +49,11 @@ function indexPages(pages: readonly PageSnapshot[]): Map<string, PageSnapshot> {
     indexed.set(path, page);
   }
   return indexed;
+}
+
+function isOriginRoot(href: string): boolean {
+  const url = new URL(href);
+  return url.pathname === '/' && !href.includes('?');
 }
 
 function compareStrings(left: string, right: string): number {

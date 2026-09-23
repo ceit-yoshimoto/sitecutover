@@ -217,8 +217,10 @@ describe('fetchPage', () => {
     }
   });
 
-  it('follows a redirect onto another local origin', async () => {
+  it('records a cross-origin redirect without requesting the next origin', async () => {
+    let targetHits = 0;
     const target = await startLocalServer((_request, response) => {
+      targetHits += 1;
       response.writeHead(200, { 'content-type': 'text/html; charset=utf-8' });
       response.end('<p>other-origin</p>');
     });
@@ -229,13 +231,51 @@ describe('fetchPage', () => {
 
     try {
       const fetched = await fetchPage(`${source.origin}/from`, options());
-      expect(fetched.status).toBe(200);
+      expect(targetHits).toBe(0);
+      expect(fetched.fetchError).toBeNull();
+      expect(fetched.status).toBeNull();
+      expect(fetched.body).toBeNull();
+      expect(fetched.crossOriginRedirectStopped).toBe(true);
       expect(fetched.finalUrl).toBe(`${target.origin}/there`);
-      expect(fetched.body).toContain('other-origin');
       expect(fetched.redirectHops).toEqual([{ url: `${source.origin}/from`, status: 302 }]);
     } finally {
       await source.close();
       await target.close();
+    }
+  });
+
+  it('does not request a redirect to loopback or link-local addresses', async () => {
+    const source = await startLocalServer((request, response) => {
+      const location = pathnameOf(request).endsWith('/loopback')
+        ? 'http://127.0.0.1:9/secret'
+        : 'http://169.254.169.254/latest/meta-data';
+      response.writeHead(302, { location });
+      response.end();
+    });
+    const calls: string[] = [];
+    const fetchImpl: FetchPageOptions['fetchImpl'] = (url, init) => {
+      calls.push(url);
+      const next = new URL(url);
+      if (
+        next.hostname === '169.254.169.254' ||
+        (next.hostname === '127.0.0.1' && next.port === '9')
+      ) {
+        return Promise.reject(new Error(`unexpected request to ${url}`));
+      }
+      return fetch(url, init);
+    };
+
+    try {
+      const loopback = await fetchPage(`${source.origin}/loopback`, options({ fetchImpl }));
+      const metadata = await fetchPage(`${source.origin}/metadata`, options({ fetchImpl }));
+      expect(loopback.crossOriginRedirectStopped).toBe(true);
+      expect(loopback.finalUrl).toBe('http://127.0.0.1:9/secret');
+      expect(loopback.fetchError).toBeNull();
+      expect(metadata.crossOriginRedirectStopped).toBe(true);
+      expect(metadata.finalUrl).toBe('http://169.254.169.254/latest/meta-data');
+      expect(calls.every((url) => new URL(url).origin === source.origin)).toBe(true);
+    } finally {
+      await source.close();
     }
   });
 

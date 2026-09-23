@@ -18,5 +18,6 @@ export function pageSnapshot(overrides: Partial<PageSnapshot> = {}): PageSnapsho
     fetchError: 'fetchError' in overrides ? (overrides.fetchError ?? null) : null,
     redirectLoop: overrides.redirectLoop ?? false,
     redirectHopLimitExceeded: overrides.redirectHopLimitExceeded ?? false,
+    crossOriginRedirectStopped: overrides.crossOriginRedirectStopped ?? false,
   };
 }

@@ -8,6 +8,7 @@ import {
 } from './limits.js';
 import { AuditModelError } from '../model/errors.js';
 import { copyPageSnapshot, type PageSnapshot } from '../model/page.js';
+import { isHtmlMime } from '../parse/html-mime.js';
 import { normalizeRobotsDirectives, parseHtml, type ParsedHtml } from '../parse/parse-html.js';
 import {
   DEFAULT_MAX_REDIRECT_HOPS,
@@ -129,7 +130,7 @@ function inspectPage(
   seen: Set<string>,
   queue: string[],
 ): { internalLinks: string[]; externalLinks: string[]; parsed: ParsedHtml | null } {
-  if (fetched.body === null) {
+  if (fetched.body === null || !isHtmlMime(fetched.contentType)) {
     return { internalLinks: [], externalLinks: [], parsed: null };
   }
 

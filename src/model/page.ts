@@ -25,6 +25,7 @@ export interface PageSnapshot {
   fetchError: FetchError | null;
   redirectLoop: boolean;
   redirectHopLimitExceeded: boolean;
+  crossOriginRedirectStopped: boolean;
 }
 
 export interface PagePair {
@@ -53,6 +54,10 @@ export function copyPageSnapshot(snapshot: PageSnapshot): PageSnapshot {
     redirectHopLimitExceeded: requireBoolean(
       snapshot.redirectHopLimitExceeded,
       'redirectHopLimitExceeded',
+    ),
+    crossOriginRedirectStopped: requireBoolean(
+      snapshot.crossOriginRedirectStopped,
+      'crossOriginRedirectStopped',
     ),
   };
 }

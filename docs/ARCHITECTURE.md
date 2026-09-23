@@ -155,7 +155,7 @@ For v0.1, discover URLs from:
 
 ### Origin boundary
 
-Only crawl the configured origin by default. External links may be recorded but should not be recursively crawled.
+Only crawl the configured origin by default. External links may be recorded but should not be recursively crawled. A redirect to another origin is recorded and not requested.
 
 ### Normalization
 
@@ -165,7 +165,7 @@ Create one canonical internal representation for crawl deduplication. Decide and
 - default ports
 - trailing slash differences
 - query strings
-- repeated slash/path normalization
+- repeated slashes, which stay distinct because they can address different resources
 - percent encoding
 
 Do not silently rewrite semantically meaningful query parameters.
@@ -188,7 +188,8 @@ Default to `GET` because metadata and link checks require HTML. `HEAD` may be us
 
 The engine must:
 
-- follow redirects with a bounded hop count
+- follow same-origin redirects with a bounded hop count
+- record a cross-origin `Location` without requesting it
 - preserve a redirect trace
 - accept HTML only for HTML parsing
 - handle timeouts and network errors as findings/runtime diagnostics

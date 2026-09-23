@@ -17,6 +17,7 @@ const snapshot: PageSnapshot = {
   fetchError: null,
   redirectLoop: false,
   redirectHopLimitExceeded: false,
+  crossOriginRedirectStopped: false,
 };
 
 describe('page snapshot', () => {
@@ -30,6 +31,7 @@ describe('page snapshot', () => {
     expect(serializeJson(copyPageSnapshot(raw as PageSnapshot))).toBe(`{
   "canonical": "https://old.example.com/about/",
   "contentType": "text/html; charset=utf-8",
+  "crossOriginRedirectStopped": false,
   "fetchError": null,
   "finalUrl": "https://old.example.com/about/",
   "internalLinks": [

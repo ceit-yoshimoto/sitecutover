@@ -17,8 +17,8 @@ describe('normalizeHttpUrl', () => {
     expect(normalizeHttpUrl('https://example.com/a?')).toBe('https://example.com/a?');
   });
 
-  it('collapses repeated slashes and resolves dot segments', () => {
-    expect(normalizeHttpUrl('https://example.com/a//b')).toBe('https://example.com/a/b');
+  it('preserves repeated slashes and resolves dot segments', () => {
+    expect(normalizeHttpUrl('https://example.com/a//b')).toBe('https://example.com/a//b');
     expect(normalizeHttpUrl('https://example.com/a/./b/')).toBe('https://example.com/a/b/');
     expect(normalizeHttpUrl('https://example.com/a/../b')).toBe('https://example.com/b');
   });

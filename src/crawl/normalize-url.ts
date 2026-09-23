@@ -3,8 +3,9 @@ const UNRESERVED = /^[A-Za-z0-9\-._~]$/u;
 /**
  * Canonical HTTP(S) URL for crawl deduplication.
  *
- * Fragments are removed. Default ports are removed. Repeated slashes collapse.
- * Trailing slashes stay, because `/docs` and `/docs/` can be different resources.
+ * Fragments are removed. Default ports are removed. Repeated slashes stay,
+ * because `/a//b` and `/a/b` can be different resources. Trailing slashes stay
+ * for the same reason.
  * Query parameter order and repeated keys stay as written. Percent-encoding of
  * unreserved characters is decoded, and other percent-encoding is uppercased.
  * Encoded reserved characters such as `%2F` are not turned into path separators.
@@ -31,7 +32,6 @@ export function normalizeHttpUrl(input: string, base?: string): string | null {
   const withoutHash = url.hash.length > 0 ? url.href.slice(0, -url.hash.length) : url.href;
   const emptyQuery = withoutHash.endsWith('?');
   url.hash = '';
-  url.pathname = collapseSlashes(url.pathname);
   url.pathname = normalizePercentEncoding(url.pathname);
   if (url.search.length > 0) {
     url.search = normalizePercentEncoding(url.search);
@@ -41,11 +41,6 @@ export function normalizeHttpUrl(input: string, base?: string): string | null {
     return `${url.href}?`;
   }
   return url.href;
-}
-
-function collapseSlashes(pathname: string): string {
-  const collapsed = pathname.replaceAll(/\/{2,}/g, '/');
-  return collapsed.length === 0 ? '/' : collapsed;
 }
 
 function normalizePercentEncoding(value: string): string {

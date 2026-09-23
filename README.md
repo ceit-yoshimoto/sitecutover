@@ -127,6 +127,13 @@ Node.js 24 or newer is required (`.nvmrc`).
 
 Library code currently covers the domain model, read-only fetching, same-origin crawling, HTML metadata, source/target pairing, and page rules SC001–SC006. The `compare` command, reporters, SC007 internal links, and SC008 sitemap coverage are still to be implemented. The package stays private until the v0.1 release.
 
+Current library rules:
+
+- `--from` and `--to` must be origin roots such as `https://example.com/`. A path or query is rejected.
+- Same-origin redirects are followed. A cross-origin `Location`, including loopback and private addresses, is recorded and not requested.
+- `/a//b` and `/a/b` stay distinct.
+- HTML metadata and links are parsed from `text/html` and `application/xhtml+xml` only.
+
 ```bash
 npm install
 npm run typecheck

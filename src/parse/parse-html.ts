@@ -1,5 +1,11 @@
 import { normalizeHttpUrl } from '../crawl/normalize-url.js';
-import { decodeHtmlText, readHtmlElements, readTagAttribute } from './extract-links.js';
+import {
+  elementText,
+  parseHtmlDocument,
+  readAttribute,
+  walkHtmlElements,
+  type HtmlElementNode,
+} from './html-tree.js';
 
 export interface ParsedHtml {
   title: string | null;
@@ -17,41 +23,36 @@ export function parseHtml(html: string, pageUrl: string): ParsedHtml {
   let baseHref: string | null = null;
   const rawLinks: string[] = [];
 
-  for (const element of readHtmlElements(html)) {
-    if (element.name === 'base' && baseHref === null && !element.inSvg) {
-      baseHref = readTagAttribute(element.raw, 'href');
+  walkHtmlElements(parseHtmlDocument(html), (element) => {
+    if (element.tagName === 'base' && baseHref === null) {
+      baseHref = readAttribute(element, 'href');
     }
 
-    if (element.name === 'title' && title === null && !element.inSvg) {
-      title = normalizeText(element.text ?? '');
+    if (element.tagName === 'title' && title === null) {
+      title = elementText(element);
     }
 
-    if (element.name === 'meta' && !element.inSvg) {
-      const name = readTagAttribute(element.raw, 'name')?.toLowerCase();
+    if (element.tagName === 'meta') {
+      const name = readAttribute(element, 'name')?.toLowerCase();
       if (name === 'description' && metaDescription === null) {
-        metaDescription = normalizeText(readTagAttribute(element.raw, 'content') ?? '');
+        metaDescription = normalizeText(readAttribute(element, 'content') ?? '');
       }
       if (name === 'robots') {
-        metaRobots = joinRobots(metaRobots, readTagAttribute(element.raw, 'content'));
+        metaRobots = joinRobots(metaRobots, readAttribute(element, 'content'));
       }
     }
 
-    if (
-      element.name === 'link' &&
-      canonicalHref === null &&
-      !element.inSvg &&
-      hasRel(element.raw, 'canonical')
-    ) {
-      canonicalHref = readTagAttribute(element.raw, 'href') ?? '';
+    if (element.tagName === 'link' && canonicalHref === null && hasRel(element, 'canonical')) {
+      canonicalHref = readAttribute(element, 'href') ?? '';
     }
 
-    if ((element.name === 'a' || element.name === 'area') && !element.inSvg) {
-      const href = readTagAttribute(element.raw, 'href');
+    if (element.tagName === 'a' || element.tagName === 'area') {
+      const href = readAttribute(element, 'href');
       if (href !== null) {
         rawLinks.push(href);
       }
     }
-  }
+  });
 
   const base = resolveBase(baseHref, pageUrl);
   const links: string[] = [];
@@ -118,8 +119,8 @@ function resolveCanonical(href: string | null, base: string): string | null {
   return normalizeHttpUrl(trimmed, base) ?? trimmed;
 }
 
-function hasRel(tag: string, token: string): boolean {
-  const rel = readTagAttribute(tag, 'rel');
+function hasRel(element: HtmlElementNode, token: string): boolean {
+  const rel = readAttribute(element, 'rel');
   if (rel === null) {
     return false;
   }
@@ -127,5 +128,5 @@ function hasRel(tag: string, token: string): boolean {
 }
 
 function normalizeText(value: string): string {
-  return decodeHtmlText(value).replaceAll(/\s+/gu, ' ').trim();
+  return value.replaceAll(/\s+/gu, ' ').trim();
 }

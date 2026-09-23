@@ -256,6 +256,9 @@ function normalizeRoot(value: string, label: string): URL {
   }
 
   url.hash = '';
+  if (url.pathname !== '/' || url.href.includes('?')) {
+    throw new AuditModelError(`${label} must be an origin root with pathname / and no query`);
+  }
   return url;
 }
 

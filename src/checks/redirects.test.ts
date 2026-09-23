@@ -92,6 +92,27 @@ describe('SC002 redirect-chain', () => {
       message: expect.stringContaining('cdn.example.org') as unknown,
     });
 
+    const stopped = checkRedirectChain(
+      {
+        path: '/a',
+        source: null,
+        target: pageSnapshot({
+          requestedUrl: 'https://new.example.net/a',
+          finalUrl: 'http://169.254.169.254/latest',
+          status: null,
+          crossOriginRedirectStopped: true,
+          redirectHops: [{ url: 'https://new.example.net/a', status: 301 }],
+        }),
+      },
+      context,
+    );
+    expect(stopped).toHaveLength(1);
+    expect(stopped[0]?.message).toContain('not-requested http://169.254.169.254/latest');
+    expect(stopped[0]?.targetValue).toEqual([
+      { url: 'https://new.example.net/a', status: 301 },
+      { url: 'http://169.254.169.254/latest', status: null },
+    ]);
+
     expect(
       checkRedirectChain(
         {

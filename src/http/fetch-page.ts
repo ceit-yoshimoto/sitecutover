@@ -33,6 +33,7 @@ export interface FetchResult {
   fetchError: FetchError | null;
   redirectLoop: boolean;
   redirectHopLimitExceeded: boolean;
+  crossOriginRedirectStopped: boolean;
 }
 
 interface ResolvedOptions {
@@ -146,6 +147,15 @@ export async function fetchPage(rawUrl: string, options: FetchPageOptions): Prom
         fetchError: next.error,
       });
     }
+    if (next.url.origin !== initial.url.origin) {
+      return result({
+        requestedUrl: initial.safeUrl,
+        finalUrl: safeHref(next.url),
+        redirectHops: hops,
+        xRobotsTag: response.headers.get('x-robots-tag'),
+        crossOriginRedirectStopped: true,
+      });
+    }
     current = next.url;
   }
 
@@ -175,6 +185,7 @@ export function toPageSnapshot(fetched: FetchResult): PageSnapshot {
     fetchError: fetched.fetchError,
     redirectLoop: fetched.redirectLoop,
     redirectHopLimitExceeded: fetched.redirectHopLimitExceeded,
+    crossOriginRedirectStopped: fetched.crossOriginRedirectStopped,
   });
 }
 
@@ -213,6 +224,7 @@ function result(partial: {
   fetchError?: FetchError | null;
   redirectLoop?: boolean;
   redirectHopLimitExceeded?: boolean;
+  crossOriginRedirectStopped?: boolean;
 }): FetchResult {
   return {
     requestedUrl: partial.requestedUrl,
@@ -225,6 +237,7 @@ function result(partial: {
     fetchError: partial.fetchError ?? null,
     redirectLoop: partial.redirectLoop ?? false,
     redirectHopLimitExceeded: partial.redirectHopLimitExceeded ?? false,
+    crossOriginRedirectStopped: partial.crossOriginRedirectStopped ?? false,
   };
 }
 

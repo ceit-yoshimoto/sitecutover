@@ -18,17 +18,16 @@ function page(url: string, title: string): PageSnapshot {
     fetchError: null,
     redirectLoop: false,
     redirectHopLimitExceeded: false,
+    crossOriginRedirectStopped: false,
   };
 }
 
 describe('mapUrl', () => {
-  it('keeps path and query and changes only the destination origin', () => {
+  it('keeps path and query when the destination is an origin root', () => {
     expect(
       mapUrl('https://old.example.com/services/web/?lang=ja', 'https://new.example.net/ignored'),
-    ).toBe('https://new.example.net/services/web/?lang=ja');
-    expect(mapUrl('https://old.example.com/docs/', 'http://new.example:8080/other')).toBe(
-      'http://new.example:8080/docs/',
-    );
+    ).toBeNull();
+    expect(mapUrl('https://old.example.com/docs/', 'http://new.example:8080/other')).toBeNull();
     expect(mapUrl('https://old.example.com/docs', 'https://new.example.net/')).toBe(
       'https://new.example.net/docs',
     );

@@ -25,7 +25,7 @@ export function checkRedirectChain(pair: PagePair, context: CheckContext): Findi
       createFinding({
         ...base,
         severity: 'error',
-        message: `Target redirect loop detected: ${formatTrace(trace)}`,
+        message: `Target redirect loop detected: ${formatTrace(trace, target.crossOriginRedirectStopped)}`,
         help: 'Break the loop so the target URL finishes on a real page.',
       }),
     );
@@ -36,7 +36,7 @@ export function checkRedirectChain(pair: PagePair, context: CheckContext): Findi
       createFinding({
         ...base,
         severity: 'error',
-        message: `Target redirect exceeded the hop limit: ${formatTrace(trace)}`,
+        message: `Target redirect exceeded the hop limit: ${formatTrace(trace, target.crossOriginRedirectStopped)}`,
         help: 'Shorten the redirect chain so it finishes within the hop limit.',
       }),
     );
@@ -47,19 +47,23 @@ export function checkRedirectChain(pair: PagePair, context: CheckContext): Findi
       createFinding({
         ...base,
         severity: 'warning',
-        message: `Target redirect chain is longer than one hop: ${formatTrace(trace)}`,
+        message: `Target redirect chain is longer than one hop: ${formatTrace(trace, target.crossOriginRedirectStopped)}`,
         help: 'Review the extra hop and remove it when it is not needed.',
       }),
     );
   }
 
-  if (endsOnAnotherOrigin(target, context.targetOrigin)) {
+  if (target.crossOriginRedirectStopped || endsOnAnotherOrigin(target, context.targetOrigin)) {
     findings.push(
       createFinding({
         ...base,
         severity: 'warning',
-        message: `Target redirect ends on a different origin: ${target.finalUrl}`,
-        help: 'Confirm the final URL is an intentional destination for this migration.',
+        message: target.crossOriginRedirectStopped
+          ? `Target redirect stops before requesting a different origin: ${formatTrace(trace, true)}`
+          : `Target redirect ends on a different origin: ${target.finalUrl}`,
+        help: target.crossOriginRedirectStopped
+          ? 'The redirect Location was recorded and not requested. Confirm that destination before following it outside this audit.'
+          : 'Confirm the final URL is an intentional destination for this migration.',
       }),
     );
   }
@@ -86,9 +90,17 @@ function traceJson(trace: readonly RedirectStep[]): JsonValue[] {
   }));
 }
 
-function formatTrace(trace: readonly RedirectStep[]): string {
+function formatTrace(trace: readonly RedirectStep[], crossOriginStopped: boolean): string {
   return trace
-    .map((hop) => `${hop.status === null ? 'failed' : String(hop.status)} ${hop.url}`)
+    .map((hop, index) => {
+      const unfetched = crossOriginStopped && index === trace.length - 1;
+      const label = unfetched
+        ? 'not-requested'
+        : hop.status === null
+          ? 'failed'
+          : String(hop.status);
+      return `${label} ${hop.url}`;
+    })
     .join(' -> ');
 }
 

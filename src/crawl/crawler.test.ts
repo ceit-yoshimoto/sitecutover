@@ -68,7 +68,7 @@ describe('crawlSite', () => {
     );
   });
 
-  it('dedupes fragments and repeated slashes without merging trailing slashes', async () => {
+  it('dedupes fragments and keeps repeated slashes distinct from a single slash', async () => {
     const paths: string[] = [];
     await withServer(
       (request, response) => {
@@ -89,9 +89,10 @@ describe('crawlSite', () => {
 
         expect(
           result.pages.map((page) => new URL(page.snapshot.requestedUrl).pathname).sort(),
-        ).toEqual(['/', '/a/b', '/docs', '/docs/'].sort());
+        ).toEqual(['/', '/a//b', '/a/b', '/docs', '/docs/'].sort());
         expect(paths.filter((path) => path === '/docs')).toHaveLength(1);
-        expect(paths).not.toContain('/a//b');
+        expect(paths).toContain('/a//b');
+        expect(paths).toContain('/a/b');
       },
     );
   });
@@ -154,8 +155,9 @@ describe('crawlSite', () => {
             timeoutMs: 2_000,
           });
 
-          expect(externalHits).toBe(1);
+          expect(externalHits).toBe(0);
           expect(result.pages).toHaveLength(1);
+          expect(result.pages[0]?.snapshot.crossOriginRedirectStopped).toBe(true);
           expect(result.pages[0]?.snapshot.finalUrl).toBe(`${external.origin}/landed`);
           expect(result.pages[0]?.snapshot.internalLinks).toEqual([]);
         },
@@ -283,6 +285,46 @@ describe('crawlSite', () => {
         expect(page?.xRobotsTag).toBe('noindex, nofollow');
         expect(page?.canonical).toBe(`${server.origin}/company/`);
         expect(page?.internalLinks).toEqual([`${server.origin}/team`]);
+      },
+    );
+  });
+
+  it('does not read HTML links from XML or plain text', async () => {
+    const paths: string[] = [];
+    await withServer(
+      (request, response) => {
+        const path = pathnameOf(request);
+        paths.push(path);
+        if (path === '/') {
+          htmlResponse(response, '<a href="/feed.xml">feed</a><a href="/notes.txt">notes</a>');
+          return;
+        }
+        if (path === '/feed.xml') {
+          response.writeHead(200, { 'content-type': 'application/xml' });
+          response.end('<rss><channel><a href="/from-xml">x</a></channel></rss>');
+          return;
+        }
+        response.writeHead(200, { 'content-type': 'text/plain; charset=utf-8' });
+        response.end('<a href="/from-text">x</a>');
+      },
+      async (server) => {
+        const result = await crawlSite({
+          rootUrl: `${server.origin}/`,
+          userAgent,
+          concurrency: 2,
+          maxPages: 10,
+          timeoutMs: 2_000,
+        });
+
+        expect(paths.sort()).toEqual(['/', '/feed.xml', '/notes.txt'].sort());
+        expect(
+          result.pages.find((page) => page.snapshot.requestedUrl.endsWith('/feed.xml'))?.snapshot
+            .title,
+        ).toBeNull();
+        expect(
+          result.pages.find((page) => page.snapshot.requestedUrl.endsWith('/notes.txt'))?.snapshot
+            .internalLinks,
+        ).toEqual([]);
       },
     );
   });

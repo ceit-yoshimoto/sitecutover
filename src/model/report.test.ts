@@ -178,18 +178,30 @@ describe('audit report model', () => {
     });
   });
 
-  it('normalizes roots and rejects credentials', () => {
+  it('accepts origin roots and rejects a path, query, or credentials', () => {
     const config = normalizeAuditConfig({
       ...configInput,
-      sourceRoot: 'https://old.example.com:443/blog/#section',
-      targetRoot: 'http://new.example.com:8080/path?lang=ja',
+      sourceRoot: 'https://old.example.com:443/#section',
+      targetRoot: 'http://new.example.com:8080/',
     });
 
-    expect(config.sourceRoot).toBe('https://old.example.com/blog/');
+    expect(config.sourceRoot).toBe('https://old.example.com/');
     expect(config.sourceOrigin).toBe('https://old.example.com');
-    expect(config.targetRoot).toBe('http://new.example.com:8080/path?lang=ja');
+    expect(config.targetRoot).toBe('http://new.example.com:8080/');
     expect(config.targetOrigin).toBe('http://new.example.com:8080');
 
+    expect(() =>
+      normalizeAuditConfig({
+        ...configInput,
+        sourceRoot: 'https://old.example.com/blog/',
+      }),
+    ).toThrow(/origin root/);
+    expect(() =>
+      normalizeAuditConfig({
+        ...configInput,
+        targetRoot: 'http://new.example.com/?lang=ja',
+      }),
+    ).toThrow(/origin root/);
     expect(() =>
       normalizeAuditConfig({
         ...configInput,

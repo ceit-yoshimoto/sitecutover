@@ -1,9 +1,6 @@
 import type { PageSnapshot } from '../model/page.js';
+import { isHtmlMime } from '../parse/html-mime.js';
 
 export function isHtmlDocument(snapshot: PageSnapshot): boolean {
-  if (snapshot.contentType === null) {
-    return true;
-  }
-  const mime = snapshot.contentType.split(';')[0]?.trim().toLowerCase() ?? '';
-  return mime === 'text/html' || mime === 'application/xhtml+xml';
+  return isHtmlMime(snapshot.contentType);
 }
