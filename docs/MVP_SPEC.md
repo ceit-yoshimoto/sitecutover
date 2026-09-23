@@ -166,7 +166,7 @@ For internal links discovered on the target:
 - linked URL resolving to `404/410/5xx` => error
 - redirect chain > 1 hop => warning
 
-Deduplicate link checks.
+Deduplicate link checks by normalized URL. Check each unique internal link on crawled target pages once, and reuse a response the crawl already fetched. Record the checked URL, status, redirect trace, and referring pages. Ignore external URLs. A cross-origin redirect is not requested. A link check does not crawl links on that destination and does not bypass the crawl page limit.
 
 ### SC008 — sitemap-coverage
 
