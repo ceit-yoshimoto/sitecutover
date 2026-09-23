@@ -224,19 +224,19 @@ Checkers must not:
 
 ## Reporter design
 
-All reporters consume the same `AuditReport`.
+`renderConsoleReport`, `renderJsonReport`, and `renderMarkdownReport` are pure functions. `renderReport` selects one of them. They do not write to stdout, fetch, or inspect pages.
 
 ### Console
 
-Optimized for humans. Concise summary first, findings grouped by severity/rule.
+Summary first, then findings in report order. Severity labels are `ERROR`, `WARN`, and `INFO`. An empty finding list says `No findings.`
 
 ### JSON
 
-Stable machine-readable contract. Treat breaking changes seriously once v1 is released.
+`renderJsonReport` returns `serializeAuditReport`. That is the machine-readable contract, including config, timing, referrers, and structured values.
 
 ### Markdown
 
-Suitable for artifacts, tickets, pull request comments, and client-facing technical handoff after manual review.
+Headings and lists suitable for a GitHub issue, pull request comment, or CI artifact. User-controlled text is fenced or inline code.
 
 ## Future GitHub Action
 

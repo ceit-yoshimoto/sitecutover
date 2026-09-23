@@ -201,18 +201,11 @@ v0.1 fetches `/robots.txt` only to read `Sitemap:` directives for SC008. A 2xx b
 
 ## Output requirements
 
-Every format must include:
+Library reporters turn one `AuditReport` into console, JSON, or Markdown text. They do not audit, fetch, or write to the terminal. The `compare` command does not call them yet.
 
-- source and target origins
-- audit timestamp
-- tool version
-- pages examined
-- counts by severity
-- rule ID for each finding
-- affected URL/path
-- actionable message
+Every format includes tool version, source and target origins, audit timestamp, pages examined, source and target page counts, error/warning/info counts, and each finding's rule ID, severity, path, source URL, target URL, referrers, message, and help when those fields exist. Finding order is the order on the report.
 
-JSON output must additionally include the normalized configuration with secret-bearing fields omitted/redacted.
+Console is a plain-text summary followed by findings. It does not print raw `sourceValue` or `targetValue`, including unchecked URL samples. JSON is `serializeAuditReport()`: pretty-printed, deterministic, one trailing newline, and the full report. Config fields stay limited to the normalized audit options. Markdown uses headings and lists. Paths, URLs, messages, and help are code, so backticks, `|`, `<`, `>`, newlines, and heading markers in those values do not change the document structure.
 
 ## Console UX
 

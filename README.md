@@ -32,31 +32,30 @@ sitecutover compare \
   --to https://new.example.com
 ```
 
-Expected output shape:
+Expected output shape, produced by the library reporters. `compare` does not call them yet:
 
 ```text
-sitecutover
+sitecutover 0.0.0
 
 Source: https://old.example.com
 Target: https://new.example.com
+Audited: 2026-09-22T00:00:01.500Z
 Pages checked: 124
+Source pages: 80
+Target pages: 90
 
-PASS  113
-WARN    8
-ERROR   3
+ERROR 1
+WARN  2
+INFO  1
 
-ERROR /column/foo/
-  source: 200
-  target: 404
-
-WARN /company/
-  canonical changed
-  source: https://old.example.com/company/
-  target: https://old.example.com/company/
-  expected target host: new.example.com
+ERROR SC001 /foo/
+  Target returned 404; source returned 200
+  Source: https://old.example.com/foo/
+  Target: https://new.example.com/foo/
+  Help: Restore the target page or add a redirect.
 ```
 
-Planned report formats:
+Planned CLI formats, once `compare` exists:
 
 ```bash
 sitecutover compare --from ... --to ... --format console
@@ -125,7 +124,7 @@ Those may be added later as optional modules where they clearly support migratio
 
 Node.js 24 or newer is required (`.nvmrc`).
 
-Library code currently covers the domain model, read-only fetching, same-origin crawling, HTML metadata, source/target pairing, and page rules SC001–SC008. The `compare` command and reporters are still to be implemented. The package stays private until the v0.1 release.
+Library code currently covers the domain model, read-only fetching, same-origin crawling, HTML metadata, source/target pairing, page rules SC001–SC008, and console, JSON, and Markdown reporters. The `compare` command is still to be implemented. The package stays private until the v0.1 release.
 
 Current library rules:
 
