@@ -61,7 +61,12 @@ src/
     title.ts
     description.ts
     internal-links.ts
-    sitemap.ts
+  sitemap/
+    parse-sitemap.ts
+    robots.ts
+    discover.ts
+    coverage.ts
+    audit-sitemaps.ts
   reporters/
     console.ts
     json.ts
@@ -152,7 +157,8 @@ For v0.1, discover URLs from:
 
 1. the supplied root URL
 2. internal links found while crawling
-3. sitemap URLs when sitemap discovery is enabled
+
+Sitemap coverage (SC008) is a separate fetch and comparison. It does not add sitemap URLs to the HTML crawl.
 
 ### Origin boundary
 
@@ -179,6 +185,7 @@ Suggested defaults:
 - max pages: 250
 - redirect hops: 10
 - request timeout: 15 seconds
+- sitemap documents per origin: 50 (hard cap 200). `robots.txt` is a separate request
 - user agent: `sitecutover/<version>`
 
 All limits should be configurable within safe bounds.

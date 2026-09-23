@@ -125,7 +125,7 @@ Those may be added later as optional modules where they clearly support migratio
 
 Node.js 24 or newer is required (`.nvmrc`).
 
-Library code currently covers the domain model, read-only fetching, same-origin crawling, HTML metadata, source/target pairing, and page rules SC001–SC007. The `compare` command, reporters, and SC008 sitemap coverage are still to be implemented. The package stays private until the v0.1 release.
+Library code currently covers the domain model, read-only fetching, same-origin crawling, HTML metadata, source/target pairing, and page rules SC001–SC008. The `compare` command and reporters are still to be implemented. The package stays private until the v0.1 release.
 
 Current library rules:
 
@@ -134,6 +134,7 @@ Current library rules:
 - `/a//b` and `/a/b` stay distinct.
 - HTML metadata and links are parsed from `text/html` and `application/xhtml+xml` only.
 - SC007 checks each unique target internal link once, records referring pages separately from `sourceUrl`, and caps additional fetches at `--max-pages`.
+- SC008 compares source sitemap URLs with target sitemap coverage after origin-root mapping. Discovery stays on the configured origin, is bounded per origin, and reads sitemap XML with a sitemap reader rather than the HTML parser.
 
 ```bash
 npm install

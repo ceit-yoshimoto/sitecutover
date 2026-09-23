@@ -172,20 +172,30 @@ Additional fetches, for internal links the crawl did not already retrieve, are c
 
 ### SC008 — sitemap-coverage
 
-Discover common sitemap locations and/or references from `robots.txt`.
+Compare sitemap coverage after a migration. This is not a general sitemap crawler. For each origin, discovery order is:
 
-At minimum compare:
+1. `Sitemap:` directives in `/robots.txt`. The directive name is case-insensitive, whitespace around the colon is ignored, `#` comment lines are ignored, and relative URLs resolve against the robots URL.
+2. `/sitemap.xml`
+3. `/sitemap_index.xml`
+4. `/wp-sitemap.xml`
 
-- source URLs present in source sitemap but absent from target coverage after origin mapping => warning
-- malformed/unreadable sitemap => warning
+Duplicate candidates are requested once. A missing `robots.txt`, and a candidate sitemap that returns 404 or 410, are not findings.
 
-Support sitemap indexes.
+Supported documents are a sitemap `<urlset>` and a `<sitemapindex>`. Index `<loc>` values are child sitemaps and are fetched only when they stay on the same origin. A child sitemap on another origin, or a sitemap response that redirects to another origin, is not requested and is reported as an SC008 warning.
+
+A retrieved body that presents as sitemap XML but cannot be parsed is an SC008 warning. A robots-declared or index-child URL that returns some other success response is an SC008 warning. A well-known path that is not a sitemap document is ignored.
+
+Coverage uses origin-root mapping: the source path and query are kept, and only the origin changes. Fragments are removed. Repeated slashes stay distinct. A source-origin URL that is absent from target sitemap coverage is an SC008 warning. URLs outside the source origin are not mapped onto the target.
+
+Each origin fetches at most 50 sitemap documents by default, with a hard cap of 200. `robots.txt` is one extra request and does not spend that budget. Redirect hops and timeouts use the shared fetch limits. A sitemap index cycle stops because each URL is visited once. When the budget is exhausted, the remaining discovered sitemap URLs are listed in one SC008 warning and are not requested.
+
+v0.1 does not decompress `.xml.gz` and does not remap paths. The `compare` command does not run this check yet.
 
 ## robots.txt
 
-v0.1 should fetch and expose robots.txt information for sitemap discovery.
+v0.1 fetches `/robots.txt` only to read `Sitemap:` directives for SC008. A missing robots.txt is not a finding.
 
-Crawler compliance behavior must be documented before release. Until then, keep tests and implementation explicit rather than making ambiguous claims about full robots exclusion support.
+Crawler exclusion from robots.txt is not implemented. Do not describe the crawler as robots-compliant until that behavior exists and is tested.
 
 ## Output requirements
 
