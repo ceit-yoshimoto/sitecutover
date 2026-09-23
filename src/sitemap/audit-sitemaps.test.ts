@@ -1,9 +1,11 @@
 import type { IncomingMessage, ServerResponse } from 'node:http';
 import { describe, expect, it } from 'vitest';
 import { AuditModelError } from '../model/errors.js';
+import { UNCHECKED_URL_SAMPLE_LIMIT } from '../model/unchecked-urls.js';
 import { startLocalServer, type LocalServer } from '../testing/local-http-server.js';
 import { auditSitemapCoverage, type AuditSitemapOptions } from './audit-sitemaps.js';
 import { discoverSitemaps } from './discover.js';
+import { SITEMAP_MAX_BODY_BYTES } from './limits.js';
 
 const userAgent = 'sitecutover-test/9';
 const xmlns = 'http://www.sitemaps.org/schemas/sitemap/0.9';
@@ -39,8 +41,11 @@ function sitemapIndex(locs: readonly string[]): string {
   return `<?xml version="1.0" encoding="UTF-8"?>\n<sitemapindex xmlns="${xmlns}">\n${entries}\n</sitemapindex>\n`;
 }
 
-function options(maxSitemaps = 20): AuditSitemapOptions {
-  return { userAgent, timeoutMs: 5_000, maxSitemaps };
+function options(
+  maxSitemaps = 20,
+  overrides: Partial<AuditSitemapOptions> = {},
+): AuditSitemapOptions {
+  return { userAgent, timeoutMs: 5_000, maxSitemaps, ...overrides };
 }
 
 async function withServer(
@@ -337,6 +342,170 @@ describe('sitemap discovery', () => {
       },
     );
   });
+
+  it('does not warn when well-known sitemap candidates are missing or HTML', async () => {
+    await withServer(
+      (_request, response) => {
+        textResponse(response, 'missing', 404);
+      },
+      async (missing) => {
+        const absent = await discoverSitemaps(missing.origin, options());
+        expect(absent.failures).toEqual([]);
+      },
+    );
+
+    await withServer(
+      (request, response) => {
+        const path = pathnameOf(request);
+        if (path === '/sitemap.xml') {
+          textResponse(response, 'gone', 410);
+          return;
+        }
+        if (path === '/sitemap_index.xml') {
+          textResponse(
+            response,
+            '<html><p>not a sitemap</p></html>',
+            200,
+            'text/html; charset=utf-8',
+          );
+          return;
+        }
+        textResponse(response, 'missing', 404);
+      },
+      async (server) => {
+        const discovered = await discoverSitemaps(server.origin, options());
+        expect(discovered.failures).toEqual([]);
+        expect(discovered.pageUrls).toEqual([]);
+      },
+    );
+  });
+
+  it('warns when a well-known sitemap cannot be checked', async () => {
+    await withServer(
+      (request, response) => {
+        if (pathnameOf(request) === '/sitemap.xml') {
+          textResponse(response, 'unavailable', 500, 'text/html; charset=utf-8');
+          return;
+        }
+        textResponse(response, 'missing', 404);
+      },
+      async (server) => {
+        const discovered = await discoverSitemaps(server.origin, options());
+        expect(discovered.failures).toEqual([
+          { url: `${server.origin}/sitemap.xml`, reason: 'unreadable', status: 500 },
+        ]);
+      },
+    );
+  });
+
+  it('warns when a well-known sitemap times out or the connection fails', async () => {
+    const hanging = await startLocalServer((request, response) => {
+      if (pathnameOf(request) === '/sitemap.xml') {
+        return;
+      }
+      textResponse(response, 'missing', 404);
+    });
+    const refused = await startLocalServer((_request, response) => {
+      textResponse(response, 'closed', 200);
+    });
+    const refusedOrigin = refused.origin;
+    await refused.close();
+
+    try {
+      const timedOut = await discoverSitemaps(hanging.origin, options(20, { timeoutMs: 200 }));
+      expect(timedOut.failures).toEqual([
+        { url: `${hanging.origin}/sitemap.xml`, reason: 'unreadable', errorCode: 'TIMEOUT' },
+      ]);
+
+      const failed = await discoverSitemaps(refusedOrigin, options());
+      expect(failed.pageUrls).toEqual([]);
+      expect(failed.failures.map((failure) => failure.errorCode)).toEqual([
+        'ECONNREFUSED',
+        'ECONNREFUSED',
+        'ECONNREFUSED',
+      ]);
+    } finally {
+      await hanging.close();
+    }
+  });
+
+  it('warns when a sitemap body exceeds the memory limit', async () => {
+    expect(SITEMAP_MAX_BODY_BYTES).toBe(2_000_000);
+    await withServer(
+      (request, response) => {
+        if (pathnameOf(request) === '/sitemap.xml') {
+          response.writeHead(200, { 'content-type': 'application/xml; charset=utf-8' });
+          response.end(Buffer.alloc(SITEMAP_MAX_BODY_BYTES + 1));
+          return;
+        }
+        textResponse(response, 'missing', 404);
+      },
+      async (server) => {
+        const discovered = await discoverSitemaps(server.origin, options());
+        expect(discovered.pageUrls).toEqual([]);
+        expect(discovered.failures).toEqual([
+          {
+            url: `${server.origin}/sitemap.xml`,
+            reason: 'unreadable',
+            status: 200,
+            errorCode: 'BODY_TOO_LARGE',
+          },
+        ]);
+      },
+    );
+  });
+
+  it('warns when a well-known sitemap redirect cannot be completed', async () => {
+    await withServer(
+      (request, response) => {
+        const path = pathnameOf(request);
+        if (path === '/sitemap.xml') {
+          response.writeHead(302, { location: '/sitemap.xml' });
+          response.end();
+          return;
+        }
+        textResponse(response, 'missing', 404);
+      },
+      async (server) => {
+        const discovered = await discoverSitemaps(server.origin, options());
+        expect(discovered.failures).toMatchObject([
+          {
+            url: `${server.origin}/sitemap.xml`,
+            reason: 'unreadable',
+            redirectLoop: true,
+          },
+        ]);
+      },
+    );
+
+    const hits = new Map<string, number>();
+    await withServer(
+      (request, response) => {
+        const path = pathnameOf(request);
+        hits.set(path, (hits.get(path) ?? 0) + 1);
+        if (path === '/sitemap.xml') {
+          response.writeHead(302, { location: '/next.xml' });
+          response.end();
+          return;
+        }
+        textResponse(response, 'missing', 404);
+      },
+      async (server) => {
+        const discovered = await discoverSitemaps(
+          server.origin,
+          options(20, { maxRedirectHops: 0 }),
+        );
+        expect(hits.get('/next.xml') ?? 0).toBe(0);
+        expect(discovered.failures).toMatchObject([
+          {
+            url: `${server.origin}/sitemap.xml`,
+            reason: 'unreadable',
+            redirectHopLimitExceeded: true,
+          },
+        ]);
+      },
+    );
+  });
 });
 
 describe('auditSitemapCoverage', () => {
@@ -389,6 +558,107 @@ describe('auditSitemapCoverage', () => {
       AuditModelError,
     );
   });
+
+  it('reports an unreadable source sitemap instead of empty coverage', async () => {
+    await withServer(
+      (request, response) => {
+        if (pathnameOf(request) === '/sitemap.xml') {
+          textResponse(response, 'unavailable', 500, 'text/html; charset=utf-8');
+          return;
+        }
+        textResponse(response, 'missing', 404);
+      },
+      async (source) => {
+        await withMissingSitemap(async (target) => {
+          const findings = await auditSitemapCoverage(source.origin, target.origin, options());
+          expect(findings).toMatchObject([
+            {
+              ruleId: 'SC008',
+              severity: 'warning',
+              sourceUrl: `${source.origin}/sitemap.xml`,
+              message: `Source sitemap could not be read (HTTP 500): ${source.origin}/sitemap.xml`,
+            },
+          ]);
+        });
+      },
+    );
+
+    await withServer(
+      (request, response) => {
+        if (pathnameOf(request) === '/sitemap.xml') {
+          response.writeHead(200, { 'content-type': 'application/xml; charset=utf-8' });
+          response.end(Buffer.alloc(SITEMAP_MAX_BODY_BYTES + 1));
+          return;
+        }
+        textResponse(response, 'missing', 404);
+      },
+      async (source) => {
+        await withMissingSitemap(async (target) => {
+          const findings = await auditSitemapCoverage(source.origin, target.origin, options());
+          expect(findings).toMatchObject([
+            {
+              ruleId: 'SC008',
+              severity: 'warning',
+              sourceUrl: `${source.origin}/sitemap.xml`,
+              message: `Source sitemap could not be read (BODY_TOO_LARGE): ${source.origin}/sitemap.xml`,
+            },
+          ]);
+        });
+      },
+    );
+  });
+
+  it('keeps a deterministic sample of unchecked sitemap URLs in the finding', async () => {
+    const childCount = UNCHECKED_URL_SAMPLE_LIMIT;
+    await withServer(
+      (request, response) => {
+        const path = pathnameOf(request);
+        const origin = originFrom(request);
+        if (path === '/robots.txt') {
+          textResponse(response, 'Sitemap: /sitemap.xml\n');
+          return;
+        }
+        if (path === '/sitemap.xml') {
+          const children = Array.from(
+            { length: childCount },
+            (_value, index) => `${origin}/c${String(index).padStart(3, '0')}.xml`,
+          );
+          xmlResponse(response, sitemapIndex(children));
+          return;
+        }
+        textResponse(response, 'missing', 404);
+      },
+      async (source) => {
+        await withMissingSitemap(async (target) => {
+          const findings = await auditSitemapCoverage(source.origin, target.origin, options(1));
+          const children = Array.from(
+            { length: childCount },
+            (_value, index) => `${source.origin}/c${String(index).padStart(3, '0')}.xml`,
+          );
+          const unchecked = [
+            `${source.origin}/sitemap_index.xml`,
+            `${source.origin}/wp-sitemap.xml`,
+            ...children,
+          ];
+          const budget = findings.find((finding) => finding.message.includes('fetch limit'));
+          expect(budget).toMatchObject({
+            ruleId: 'SC008',
+            severity: 'warning',
+            message: `Source sitemap fetch limit reached; ${String(unchecked.length)} sitemaps were not checked`,
+            targetValue: {
+              fetchBudget: 1,
+              uncheckedCount: unchecked.length,
+              uncheckedUrls: unchecked.slice(0, UNCHECKED_URL_SAMPLE_LIMIT),
+              uncheckedUrlsTruncated: true,
+            },
+          });
+          expect(JSON.stringify(budget?.targetValue)).not.toContain(
+            unchecked[UNCHECKED_URL_SAMPLE_LIMIT] ?? 'missing-sample',
+          );
+        });
+      },
+    );
+  });
 });
 
 function originFrom(request: IncomingMessage): string {
@@ -397,4 +667,10 @@ function originFrom(request: IncomingMessage): string {
     throw new Error('fixture request is missing a host');
   }
   return `http://${host}`;
+}
+
+async function withMissingSitemap(run: (server: LocalServer) => Promise<void>): Promise<void> {
+  await withServer((_request, response) => {
+    textResponse(response, 'missing', 404);
+  }, run);
 }

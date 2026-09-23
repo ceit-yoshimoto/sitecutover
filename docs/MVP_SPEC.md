@@ -168,7 +168,7 @@ For internal links discovered on the target:
 
 Deduplicate link checks by normalized URL. Check each unique internal link on crawled target pages once, and reuse a response the crawl already fetched. Record the checked URL as `targetUrl` and the target pages that contain the link as `referrers`. `sourceUrl` stays reserved for the source site. Ignore external URLs. A cross-origin redirect is not requested. A link check does not crawl links on that destination.
 
-Additional fetches, for internal links the crawl did not already retrieve, are capped by `--max-pages`. That cap is separate from crawl reuse: a crawled URL does not spend it. URLs are chosen in sorted order. When the cap is reached, the audit reports how many links were left unchecked and does not request them.
+Additional fetches, for internal links the crawl did not already retrieve, are capped by `--max-pages`. That cap is separate from crawl reuse: a crawled URL does not spend it. URLs are chosen in sorted order. When the cap is reached, the audit reports the full unchecked count and does not request the remaining URLs. The finding keeps a deterministic sample of at most 100 URLs. `uncheckedUrlsTruncated` is true when the sample is shorter than the count.
 
 ### SC008 — sitemap-coverage
 
@@ -179,15 +179,19 @@ Compare sitemap coverage after a migration. This is not a general sitemap crawle
 3. `/sitemap_index.xml`
 4. `/wp-sitemap.xml`
 
-Duplicate candidates are requested once. A missing `robots.txt`, and a candidate sitemap that returns 404 or 410, are not findings.
+Duplicate candidates are requested once. A missing `robots.txt` is not a finding. A candidate that returns 404 or 410 is not a finding. A well-known path that returns 2xx with a non-sitemap content type, such as HTML, is not a finding.
+
+A well-known path that cannot be checked is an SC008 warning. That includes HTTP 5xx, timeout, network failure, a redirect loop, the redirect hop limit, and a body over the sitemap size limit. robots-declared and index-child URLs still warn when a success response is not a sitemap document, and when the response cannot be checked.
 
 Supported documents are a sitemap `<urlset>` and a `<sitemapindex>`. Index `<loc>` values are child sitemaps and are fetched only when they stay on the same origin. A child sitemap on another origin, or a sitemap response that redirects to another origin, is not requested and is reported as an SC008 warning.
 
-A retrieved body that presents as sitemap XML but cannot be parsed is an SC008 warning. A robots-declared or index-child URL that returns some other success response is an SC008 warning. A well-known path that is not a sitemap document is ignored.
+A retrieved body that presents as sitemap XML but cannot be parsed is an SC008 warning.
+
+Sitemap discovery reads each response body into memory, up to 2,000,000 bytes. A larger body is not parsed and produces an SC008 warning. v0.1 does not stream sitemap XML.
 
 Coverage uses origin-root mapping: the source path and query are kept, and only the origin changes. Fragments are removed. Repeated slashes stay distinct. A source-origin URL that is absent from target sitemap coverage is an SC008 warning. URLs outside the source origin are not mapped onto the target.
 
-Each origin fetches at most 50 sitemap documents by default, with a hard cap of 200. `robots.txt` is one extra request and does not spend that budget. Redirect hops and timeouts use the shared fetch limits. A sitemap index cycle stops because each URL is visited once. When the budget is exhausted, the remaining discovered sitemap URLs are listed in one SC008 warning and are not requested.
+Each origin fetches at most 50 sitemap documents by default, with a hard cap of 200. `robots.txt` is one extra request and does not spend that budget. Redirect hops and timeouts use the shared fetch limits. A sitemap index cycle stops because each URL is visited once. When the budget is exhausted, remaining discovered sitemap URLs are not requested. The finding records the full unchecked count and a deterministic sample of at most 100 URLs, in discovery order. `uncheckedUrlsTruncated` is true when the sample is shorter than the count.
 
 v0.1 does not decompress `.xml.gz` and does not remap paths. The `compare` command does not run this check yet.
 

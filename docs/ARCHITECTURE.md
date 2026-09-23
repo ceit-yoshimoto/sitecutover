@@ -186,6 +186,8 @@ Suggested defaults:
 - redirect hops: 10
 - request timeout: 15 seconds
 - sitemap documents per origin: 50 (hard cap 200). `robots.txt` is a separate request
+- sitemap body retained in memory: 2,000,000 bytes
+- unchecked URL sample stored on a finding: 100
 - user agent: `sitecutover/<version>`
 
 All limits should be configurable within safe bounds.

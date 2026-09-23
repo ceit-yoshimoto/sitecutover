@@ -2,6 +2,7 @@ import type { IncomingMessage, ServerResponse } from 'node:http';
 import { describe, expect, it } from 'vitest';
 import { crawlSite } from '../crawl/crawler.js';
 import { startLocalServer, type LocalServer } from '../testing/local-http-server.js';
+import { UNCHECKED_URL_SAMPLE_LIMIT } from '../model/unchecked-urls.js';
 import { pageSnapshot } from '../testing/page-snapshot.js';
 import {
   auditInternalLinks,
@@ -333,10 +334,47 @@ describe('auditInternalLinks', () => {
             fetchBudget: 1,
             uncheckedCount: 2,
             uncheckedUrls: [`${server.origin}/n`, `${server.origin}/o`],
+            uncheckedUrlsTruncated: false,
           },
         });
         expect(skipped?.sourceUrl).toBeUndefined();
       },
     );
+  });
+
+  it('stores a deterministic sample when unchecked links exceed the report limit', async () => {
+    const origin = 'https://example.com';
+    const total = UNCHECKED_URL_SAMPLE_LIMIT + 5;
+    const sorted = Array.from(
+      { length: total },
+      (_value, index) => `${origin}/p/${String(index).padStart(4, '0')}`,
+    );
+    const findings = await auditInternalLinks(
+      [
+        {
+          snapshot: pageSnapshot({
+            requestedUrl: `${origin}/`,
+            internalLinks: [...sorted].reverse(),
+          }),
+          externalLinks: [],
+        },
+      ],
+      auditOptions({ maxLinkFetches: 0 }),
+    );
+    const skipped = findings.find((finding) => finding.targetUrl === undefined);
+
+    expect(findings.filter((finding) => finding.ruleId === 'SC007')).toEqual([skipped]);
+    expect(skipped).toMatchObject({
+      ruleId: 'SC007',
+      severity: 'warning',
+      message: `Internal link check limit reached; ${String(total)} links were not checked`,
+      targetValue: {
+        fetchBudget: 0,
+        uncheckedCount: total,
+        uncheckedUrls: sorted.slice(0, UNCHECKED_URL_SAMPLE_LIMIT),
+        uncheckedUrlsTruncated: true,
+      },
+    });
+    expect(JSON.stringify(skipped).includes(sorted[UNCHECKED_URL_SAMPLE_LIMIT] ?? '')).toBe(false);
   });
 });

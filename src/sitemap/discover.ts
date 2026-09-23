@@ -8,6 +8,7 @@ import {
 } from '../http/fetch-page.js';
 import { AuditModelError } from '../model/errors.js';
 import { requireOrigin } from './coverage.js';
+import { SITEMAP_MAX_BODY_BYTES } from './limits.js';
 import { parseSitemapXml } from './parse-sitemap.js';
 import { readSitemapDirectives } from './robots.js';
 
@@ -23,6 +24,9 @@ export interface SitemapFailure {
   reason: SitemapFailureReason;
   status?: number;
   finalUrl?: string;
+  errorCode?: string;
+  redirectLoop?: boolean;
+  redirectHopLimitExceeded?: boolean;
 }
 
 export interface SitemapDiscovery {
@@ -157,19 +161,27 @@ function classifyResponse(
   if (result.status === 404 || result.status === 410) {
     return 'skip';
   }
-  const failed =
+  if (couldNotCheckSitemap(result)) {
+    return 'unreadable';
+  }
+  if (!looksLikeSitemap(result.contentType)) {
+    return source === 'well-known' ? 'skip' : 'unreadable';
+  }
+  if (result.body === null) {
+    return 'unreadable';
+  }
+  return 'ok';
+}
+
+function couldNotCheckSitemap(result: FetchResult): boolean {
+  return (
     result.fetchError !== null ||
     result.redirectLoop ||
     result.redirectHopLimitExceeded ||
     result.status === null ||
     result.status < 200 ||
-    result.status >= 300 ||
-    result.body === null ||
-    !looksLikeSitemap(result.contentType);
-  if (failed) {
-    return source === 'well-known' ? 'skip' : 'unreadable';
-  }
-  return 'ok';
+    result.status >= 300
+  );
 }
 
 function looksLikeSitemap(contentType: string | null): boolean {
@@ -194,6 +206,15 @@ function failureFor(
   if (typeof result.status === 'number') {
     failure.status = result.status;
   }
+  if (result.fetchError !== null) {
+    failure.errorCode = result.fetchError.code;
+  }
+  if (result.redirectLoop) {
+    failure.redirectLoop = true;
+  }
+  if (result.redirectHopLimitExceeded) {
+    failure.redirectHopLimitExceeded = true;
+  }
   if (reason === 'cross-origin-redirect') {
     failure.finalUrl = result.finalUrl;
   }
@@ -205,6 +226,7 @@ function fetchSettings(options: DiscoverSitemapOptions): FetchPageOptions {
     userAgent: options.userAgent,
     timeoutMs: options.timeoutMs,
     maxRedirectHops: options.maxRedirectHops ?? DEFAULT_MAX_REDIRECT_HOPS,
+    maxBodyBytes: SITEMAP_MAX_BODY_BYTES,
     ...(options.fetchImpl === undefined ? {} : { fetchImpl: options.fetchImpl }),
   };
 }

@@ -11,6 +11,7 @@ import { AuditModelError } from '../model/errors.js';
 import type { Finding } from '../model/finding.js';
 import type { JsonObject } from '../model/json.js';
 import type { PageSnapshot } from '../model/page.js';
+import { sampleUncheckedUrls } from '../model/unchecked-urls.js';
 import { createFinding } from './create-finding.js';
 
 export interface InternalLinkTarget {
@@ -116,14 +117,16 @@ export async function auditInternalLinks(
 }
 
 function uncheckedLinksFinding(fetchBudget: number, unchecked: readonly string[]): Finding {
+  const sample = sampleUncheckedUrls(unchecked);
   return createFinding({
     ruleId: 'SC007',
     severity: 'warning',
-    message: `Internal link check limit reached; ${String(unchecked.length)} links were not checked`,
+    message: `Internal link check limit reached; ${String(sample.uncheckedCount)} links were not checked`,
     targetValue: {
       fetchBudget,
-      uncheckedCount: unchecked.length,
-      uncheckedUrls: [...unchecked],
+      uncheckedCount: sample.uncheckedCount,
+      uncheckedUrls: sample.uncheckedUrls,
+      uncheckedUrlsTruncated: sample.uncheckedUrlsTruncated,
     },
     help: 'The additional internal-link fetch budget was exhausted. Raise maxPages to check the remaining URLs.',
   });

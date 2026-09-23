@@ -1,5 +1,6 @@
 import type { Finding } from '../model/finding.js';
 import type { JsonObject } from '../model/json.js';
+import { sampleUncheckedUrls } from '../model/unchecked-urls.js';
 import { createFinding } from '../checks/create-finding.js';
 import { compareSitemapCoverage } from './coverage.js';
 import {
@@ -64,14 +65,31 @@ function failureFinding(side: 'source' | 'target', failure: SitemapFailure): Fin
       help: 'v0.1 does not request sitemap URLs on another origin.',
     });
   }
-  const status = failure.status === undefined ? '' : ` (HTTP ${String(failure.status)})`;
+  const detail = unreadableDetail(failure);
+  const suffix = detail === '' ? '' : ` (${detail})`;
   return createFinding({
     ruleId: 'SC008',
     severity: 'warning',
-    message: `${label} sitemap could not be read${status}: ${failure.url}`,
+    message: `${label} sitemap could not be read${suffix}: ${failure.url}`,
     ...urlField,
-    help: 'Confirm this sitemap URL returns XML.',
+    help: 'Confirm this sitemap URL returns XML within the sitemap body limit.',
   });
+}
+
+function unreadableDetail(failure: SitemapFailure): string {
+  if (failure.errorCode !== undefined) {
+    return failure.errorCode;
+  }
+  if (failure.redirectLoop === true) {
+    return 'redirect loop';
+  }
+  if (failure.redirectHopLimitExceeded === true) {
+    return 'redirect hop limit';
+  }
+  if (failure.status !== undefined) {
+    return `HTTP ${String(failure.status)}`;
+  }
+  return '';
 }
 
 function budgetFinding(
@@ -80,15 +98,17 @@ function budgetFinding(
   uncheckedUrls: readonly string[],
 ): Finding {
   const label = side === 'source' ? 'Source' : 'Target';
+  const sample = sampleUncheckedUrls(uncheckedUrls);
   const targetValue: JsonObject = {
     fetchBudget,
-    uncheckedCount: uncheckedUrls.length,
-    uncheckedUrls: [...uncheckedUrls],
+    uncheckedCount: sample.uncheckedCount,
+    uncheckedUrls: sample.uncheckedUrls,
+    uncheckedUrlsTruncated: sample.uncheckedUrlsTruncated,
   };
   return createFinding({
     ruleId: 'SC008',
     severity: 'warning',
-    message: `${label} sitemap fetch limit reached; ${String(uncheckedUrls.length)} sitemaps were not checked`,
+    message: `${label} sitemap fetch limit reached; ${String(sample.uncheckedCount)} sitemaps were not checked`,
     targetValue,
     help: 'The sitemap fetch budget was exhausted. Remaining sitemap URLs were not requested.',
   });
