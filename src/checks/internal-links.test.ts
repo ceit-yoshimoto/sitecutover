@@ -3,7 +3,11 @@ import { describe, expect, it } from 'vitest';
 import { crawlSite } from '../crawl/crawler.js';
 import { startLocalServer, type LocalServer } from '../testing/local-http-server.js';
 import { pageSnapshot } from '../testing/page-snapshot.js';
-import { auditInternalLinks, checkInternalLink } from './internal-links.js';
+import {
+  auditInternalLinks,
+  checkInternalLink,
+  type AuditInternalLinkOptions,
+} from './internal-links.js';
 
 const userAgent = 'sitecutover-test/9';
 
@@ -35,6 +39,16 @@ async function withServer(
   } finally {
     await server.close();
   }
+}
+
+function auditOptions(overrides: Partial<AuditInternalLinkOptions> = {}): AuditInternalLinkOptions {
+  return {
+    userAgent,
+    timeoutMs: 2_000,
+    concurrency: 2,
+    maxLinkFetches: 20,
+    ...overrides,
+  };
 }
 
 async function crawled(
@@ -71,11 +85,12 @@ describe('checkInternalLink', () => {
     expect(findings[0]).toMatchObject({
       ruleId: 'SC007',
       path: '/old',
-      sourceUrl: 'https://new.example.net/a',
       targetUrl: 'https://new.example.net/old',
-      sourceValue: ['https://new.example.net/a', 'https://new.example.net/b'],
+      referrers: ['https://new.example.net/a', 'https://new.example.net/b'],
       targetValue: { status: 404, finalUrl: 'https://new.example.net/new' },
     });
+    expect(findings[0]?.sourceUrl).toBeUndefined();
+    expect(findings[0]?.sourceValue).toBeUndefined();
   });
 });
 
@@ -134,11 +149,7 @@ describe('auditInternalLinks', () => {
       },
       async (server) => {
         const crawl = await crawled(server, 20);
-        const findings = await auditInternalLinks(crawl.pages, {
-          userAgent,
-          timeoutMs: 2_000,
-          concurrency: 2,
-        });
+        const findings = await auditInternalLinks(crawl.pages, auditOptions());
 
         expect(findings.filter((finding) => finding.path === '/ok')).toEqual([]);
         expect(findings.filter((finding) => finding.path === '/once')).toEqual([]);
@@ -158,8 +169,9 @@ describe('auditInternalLinks', () => {
         ]);
         expect(findings.find((finding) => finding.path === '/dup')).toMatchObject({
           severity: 'error',
-          sourceValue: [`${server.origin}/a`, `${server.origin}/b`],
+          referrers: [`${server.origin}/a`, `${server.origin}/b`],
         });
+        expect(findings.find((finding) => finding.path === '/dup')?.sourceUrl).toBeUndefined();
         expect(hits.get('/dup')).toBe(1);
         expect(hits.get('/missing')).toBe(1);
         expect(hits.get('/ok')).toBe(1);
@@ -186,11 +198,7 @@ describe('auditInternalLinks', () => {
       },
       async (server) => {
         const crawl = await crawled(server, 10);
-        const findings = await auditInternalLinks(crawl.pages, {
-          userAgent,
-          timeoutMs: 2_000,
-          concurrency: 2,
-        });
+        const findings = await auditInternalLinks(crawl.pages, auditOptions());
 
         expect(findings.map((finding) => finding.path)).toEqual(['/item?id=2']);
         expect(hits.get('/item?id=1')).toBe(1);
@@ -220,11 +228,7 @@ describe('auditInternalLinks', () => {
         },
         async (server) => {
           const crawl = await crawled(server, 10);
-          const findings = await auditInternalLinks(crawl.pages, {
-            userAgent,
-            timeoutMs: 2_000,
-            concurrency: 2,
-          });
+          const findings = await auditInternalLinks(crawl.pages, auditOptions());
 
           expect(externalHits).toBe(0);
           expect(findings.filter((finding) => finding.severity === 'error')).toEqual([]);
@@ -254,11 +258,7 @@ describe('auditInternalLinks', () => {
       async (server) => {
         const crawl = await crawled(server, 1, 1);
         expect(hits).toEqual(['/']);
-        const findings = await auditInternalLinks(crawl.pages, {
-          userAgent,
-          timeoutMs: 2_000,
-          concurrency: 2,
-        });
+        const findings = await auditInternalLinks(crawl.pages, auditOptions());
 
         expect(hits.filter((path) => path === '/secret')).toEqual([]);
         expect(findings.map((finding) => finding.path).sort()).toEqual(['/a']);
@@ -288,12 +288,54 @@ describe('auditInternalLinks', () => {
       },
       async (server) => {
         const crawl = await crawled(server, 1, 1);
-        await auditInternalLinks(crawl.pages, {
-          userAgent,
-          timeoutMs: 2_000,
-          concurrency: 2,
-        });
+        await auditInternalLinks(crawl.pages, auditOptions());
         expect(peak).toBe(2);
+      },
+    );
+  });
+
+  it('reuses crawled snapshots and reports links left beyond the fetch budget', async () => {
+    const hits = new Map<string, number>();
+    await withServer(
+      (request, response) => {
+        const path = pathnameOf(request);
+        hits.set(path, (hits.get(path) ?? 0) + 1);
+        if (path === '/') {
+          htmlResponse(response, [link('/kept'), link('/m'), link('/n'), link('/o')].join(''));
+          return;
+        }
+        htmlResponse(response, '<p>page</p>', path === '/m' ? 404 : 200);
+      },
+      async (server) => {
+        const crawl = await crawled(server, 2, 1);
+        const findings = await auditInternalLinks(
+          crawl.pages,
+          auditOptions({ maxLinkFetches: 1, concurrency: 1 }),
+        );
+        const checked = findings.find((finding) => finding.path === '/m');
+        const skipped = findings.find(
+          (finding) => finding.targetUrl === undefined && finding.severity === 'warning',
+        );
+
+        expect(hits.get('/kept')).toBe(1);
+        expect(hits.get('/m')).toBe(1);
+        expect(hits.get('/n') ?? 0).toBe(0);
+        expect(hits.get('/o') ?? 0).toBe(0);
+        expect(checked).toMatchObject({
+          severity: 'error',
+          referrers: [`${server.origin}/`],
+        });
+        expect(checked?.sourceUrl).toBeUndefined();
+        expect(skipped).toMatchObject({
+          ruleId: 'SC007',
+          message: 'Internal link check limit reached; 2 links were not checked',
+          targetValue: {
+            fetchBudget: 1,
+            uncheckedCount: 2,
+            uncheckedUrls: [`${server.origin}/n`, `${server.origin}/o`],
+          },
+        });
+        expect(skipped?.sourceUrl).toBeUndefined();
       },
     );
   });

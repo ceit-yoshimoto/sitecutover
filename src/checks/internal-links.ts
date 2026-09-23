@@ -1,5 +1,5 @@
 import type { CrawlPage } from '../crawl/crawler.js';
-import { MAX_CONCURRENCY_LIMIT } from '../crawl/limits.js';
+import { MAX_CONCURRENCY_LIMIT, MAX_LINK_FETCHES_LIMIT } from '../crawl/limits.js';
 import { pathKeyForUrl } from '../compare/pair-pages.js';
 import {
   DEFAULT_MAX_REDIRECT_HOPS,
@@ -23,6 +23,8 @@ export interface AuditInternalLinkOptions {
   userAgent: string;
   timeoutMs: number;
   concurrency: number;
+  /** New fetches only. v0.1 passes the configured `--max-pages` value. */
+  maxLinkFetches: number;
   maxRedirectHops?: number;
   fetchImpl?: FetchPageOptions['fetchImpl'];
 }
@@ -30,8 +32,7 @@ export interface AuditInternalLinkOptions {
 export function checkInternalLink(target: InternalLinkTarget): Finding[] {
   const path = pathKeyForUrl(target.url);
   const referrers = uniqueSorted(target.referrers);
-  const sourceUrl = referrers[0];
-  if (path === null || sourceUrl === undefined) {
+  if (path === null || referrers.length === 0) {
     return [];
   }
 
@@ -39,9 +40,8 @@ export function checkInternalLink(target: InternalLinkTarget): Finding[] {
   const shared = {
     ruleId: 'SC007' as const,
     path,
-    sourceUrl,
     targetUrl: target.url,
-    sourceValue: referrers,
+    referrers,
     targetValue: linkValue(target.snapshot),
   };
   const findings: Finding[] = [];
@@ -76,6 +76,7 @@ export async function auditInternalLinks(
   options: AuditInternalLinkOptions,
 ): Promise<Finding[]> {
   const concurrency = readConcurrency(options.concurrency);
+  const maxLinkFetches = readMaxLinkFetches(options.maxLinkFetches);
   const referrersByUrl = collectInternalLinks(pages);
   const crawled = new Map<string, PageSnapshot>();
   for (const page of pages) {
@@ -86,8 +87,10 @@ export async function auditInternalLinks(
 
   const urls = [...referrersByUrl.keys()].sort(compareStrings);
   const missing = urls.filter((url) => !crawled.has(url));
+  const toFetch = missing.slice(0, maxLinkFetches);
+  const unchecked = missing.slice(maxLinkFetches);
   const fetched = new Map<string, PageSnapshot>();
-  await mapPool(missing, concurrency, async (url) => {
+  await mapPool(toFetch, concurrency, async (url) => {
     const result = await fetchPage(url, {
       userAgent: options.userAgent,
       timeoutMs: options.timeoutMs,
@@ -106,7 +109,24 @@ export async function auditInternalLinks(
     }
     findings.push(...checkInternalLink({ url, referrers, snapshot }));
   }
+  if (unchecked.length > 0) {
+    findings.push(uncheckedLinksFinding(maxLinkFetches, unchecked));
+  }
   return findings;
+}
+
+function uncheckedLinksFinding(fetchBudget: number, unchecked: readonly string[]): Finding {
+  return createFinding({
+    ruleId: 'SC007',
+    severity: 'warning',
+    message: `Internal link check limit reached; ${String(unchecked.length)} links were not checked`,
+    targetValue: {
+      fetchBudget,
+      uncheckedCount: unchecked.length,
+      uncheckedUrls: [...unchecked],
+    },
+    help: 'The additional internal-link fetch budget was exhausted. Raise maxPages to check the remaining URLs.',
+  });
 }
 
 function collectInternalLinks(pages: readonly CrawlPage[]): Map<string, string[]> {
@@ -166,6 +186,15 @@ function compareStrings(left: string, right: string): number {
     return 1;
   }
   return 0;
+}
+
+function readMaxLinkFetches(value: number): number {
+  if (!Number.isInteger(value) || value < 0 || value > MAX_LINK_FETCHES_LIMIT) {
+    throw new AuditModelError(
+      `maxLinkFetches must be an integer from 0 to ${String(MAX_LINK_FETCHES_LIMIT)}`,
+    );
+  }
+  return value;
 }
 
 function readConcurrency(value: number): number {

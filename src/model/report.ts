@@ -154,6 +154,7 @@ function copyFinding(finding: Finding, index: number): Finding {
   assignText(copy, 'path', finding.path, `${label}.path`);
   assignText(copy, 'sourceUrl', finding.sourceUrl, `${label}.sourceUrl`);
   assignText(copy, 'targetUrl', finding.targetUrl, `${label}.targetUrl`);
+  assignReferrers(copy, finding.referrers, label);
   assignText(copy, 'help', finding.help, `${label}.help`);
   assignJson(copy, 'sourceValue', finding.sourceValue);
   assignJson(copy, 'targetValue', finding.targetValue);
@@ -170,6 +171,28 @@ function assignText(
     return;
   }
   finding[key] = readRequiredText(value, label);
+}
+
+function assignReferrers(
+  finding: Finding,
+  value: readonly string[] | undefined,
+  label: string,
+): void {
+  if (value === undefined) {
+    return;
+  }
+  if (!Array.isArray(value) || value.length === 0) {
+    throw new AuditModelError(`${label}.referrers must be a non-empty list of URLs`);
+  }
+  const referrers: string[] = [];
+  for (let index = 0; index < value.length; index += 1) {
+    const item: unknown = value[index];
+    if (typeof item !== 'string') {
+      throw new AuditModelError(`${label}.referrers[${String(index)}] must be a non-empty string`);
+    }
+    referrers.push(readRequiredText(item, `${label}.referrers[${String(index)}]`));
+  }
+  finding.referrers = referrers;
 }
 
 function assignJson(
@@ -211,6 +234,13 @@ function compareFindings(left: Finding, right: Finding): number {
   const byTarget = compareStrings(left.targetUrl ?? '', right.targetUrl ?? '');
   if (byTarget !== 0) {
     return byTarget;
+  }
+  const byReferrers = compareStrings(
+    (left.referrers ?? []).join('\n'),
+    (right.referrers ?? []).join('\n'),
+  );
+  if (byReferrers !== 0) {
+    return byReferrers;
   }
   return compareStrings(left.message, right.message);
 }

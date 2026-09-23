@@ -216,6 +216,51 @@ describe('audit report model', () => {
     ).toThrow(/http or https/);
   });
 
+  it('serializes SC007 referrers separately from sourceUrl', () => {
+    const report = reportFrom([
+      {
+        ruleId: 'SC007',
+        severity: 'error',
+        message: 'Internal link returned 404',
+        path: '/missing',
+        targetUrl: 'https://new.example.net/missing',
+        referrers: ['https://new.example.net/b', 'https://new.example.net/a'],
+      },
+    ]);
+
+    expect(report.findings[0]).toEqual({
+      ruleId: 'SC007',
+      severity: 'error',
+      message: 'Internal link returned 404',
+      path: '/missing',
+      targetUrl: 'https://new.example.net/missing',
+      referrers: ['https://new.example.net/b', 'https://new.example.net/a'],
+    });
+    const json = serializeAuditReport(report);
+    expect(json).toContain('"referrers"');
+    expect(json).not.toContain('sourceUrl');
+    expect(() =>
+      reportFrom([
+        {
+          ruleId: 'SC007',
+          severity: 'error',
+          message: 'Internal link returned 404',
+          referrers: [''],
+        },
+      ]),
+    ).toThrow(/referrers/);
+    expect(() =>
+      reportFrom([
+        {
+          ruleId: 'SC007',
+          severity: 'error',
+          message: 'Internal link returned 404',
+          referrers: [],
+        },
+      ]),
+    ).toThrow(/referrers/);
+  });
+
   it('rejects an unfinished time range', () => {
     expect(() =>
       createAuditReport({

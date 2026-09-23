@@ -46,6 +46,7 @@ export interface Finding {
   path?: string;
   sourceUrl?: string;
   targetUrl?: string;
+  referrers?: readonly string[];
   sourceValue?: JsonValue;
   targetValue?: JsonValue;
   help?: string;

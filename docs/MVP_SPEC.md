@@ -166,7 +166,9 @@ For internal links discovered on the target:
 - linked URL resolving to `404/410/5xx` => error
 - redirect chain > 1 hop => warning
 
-Deduplicate link checks by normalized URL. Check each unique internal link on crawled target pages once, and reuse a response the crawl already fetched. Record the checked URL, status, redirect trace, and referring pages. Ignore external URLs. A cross-origin redirect is not requested. A link check does not crawl links on that destination and does not bypass the crawl page limit.
+Deduplicate link checks by normalized URL. Check each unique internal link on crawled target pages once, and reuse a response the crawl already fetched. Record the checked URL as `targetUrl` and the target pages that contain the link as `referrers`. `sourceUrl` stays reserved for the source site. Ignore external URLs. A cross-origin redirect is not requested. A link check does not crawl links on that destination.
+
+Additional fetches, for internal links the crawl did not already retrieve, are capped by `--max-pages`. That cap is separate from crawl reuse: a crawled URL does not spend it. URLs are chosen in sorted order. When the cap is reached, the audit reports how many links were left unchecked and does not request them.
 
 ### SC008 — sitemap-coverage
 

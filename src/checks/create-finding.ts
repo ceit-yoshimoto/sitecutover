@@ -5,9 +5,10 @@ export function createFinding(input: {
   ruleId: RuleId;
   severity: Severity;
   message: string;
-  path: string;
+  path?: string;
   sourceUrl?: string;
   targetUrl?: string;
+  referrers?: readonly string[];
   sourceValue?: JsonValue;
   targetValue?: JsonValue;
   help?: string;
@@ -16,13 +17,18 @@ export function createFinding(input: {
     ruleId: input.ruleId,
     severity: input.severity,
     message: input.message,
-    path: input.path,
   };
+  if (input.path !== undefined) {
+    finding.path = input.path;
+  }
   if (input.sourceUrl !== undefined) {
     finding.sourceUrl = input.sourceUrl;
   }
   if (input.targetUrl !== undefined) {
     finding.targetUrl = input.targetUrl;
+  }
+  if (input.referrers !== undefined && input.referrers.length > 0) {
+    finding.referrers = [...input.referrers];
   }
   if (input.sourceValue !== undefined) {
     finding.sourceValue = input.sourceValue;

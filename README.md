@@ -133,7 +133,7 @@ Current library rules:
 - Same-origin redirects are followed. A cross-origin `Location`, including loopback and private addresses, is recorded and not requested.
 - `/a//b` and `/a/b` stay distinct.
 - HTML metadata and links are parsed from `text/html` and `application/xhtml+xml` only.
-- SC007 checks each unique target internal link once, reuses crawl responses, and records the referring pages.
+- SC007 checks each unique target internal link once, records referring pages separately from `sourceUrl`, and caps additional fetches at `--max-pages`.
 
 ```bash
 npm install

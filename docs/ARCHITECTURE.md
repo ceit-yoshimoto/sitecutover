@@ -122,6 +122,7 @@ interface Finding {
   path?: string;
   sourceUrl?: string;
   targetUrl?: string;
+  referrers?: readonly string[];
   sourceValue?: unknown;
   targetValue?: unknown;
   help?: string;
