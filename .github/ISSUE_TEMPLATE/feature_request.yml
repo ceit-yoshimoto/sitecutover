@@ -1,0 +1,29 @@
+name: Feature request
+description: Propose an improvement to a real website migration workflow
+title: '[Feature]: '
+labels: ['type: feature']
+body:
+  - type: textarea
+    id: problem
+    attributes:
+      label: Migration problem
+      description: What real cutover/migration problem are you trying to solve?
+    validations:
+      required: true
+  - type: textarea
+    id: current-workaround
+    attributes:
+      label: Current workaround
+      description: How do you check or solve this today?
+  - type: textarea
+    id: proposal
+    attributes:
+      label: Proposed behavior
+      description: Describe the smallest useful behavior you would like sitecutover to provide.
+    validations:
+      required: true
+  - type: textarea
+    id: examples
+    attributes:
+      label: Example input/output
+      description: Use anonymized or public examples only.
