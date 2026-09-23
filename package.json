@@ -1,0 +1,32 @@
+{
+  "name": "sitecutover",
+  "version": "0.0.0",
+  "private": true,
+  "description": "Detect website migration and production-cutover regressions.",
+  "license": "MIT",
+  "type": "module",
+  "engines": {
+    "node": ">=24"
+  },
+  "bin": {
+    "sitecutover": "./dist/cli/main.js"
+  },
+  "scripts": {
+    "build": "tsc -p tsconfig.build.json && chmod +x dist/cli/main.js",
+    "typecheck": "tsc -p tsconfig.json --noEmit",
+    "test": "vitest run",
+    "test:watch": "vitest",
+    "lint": "eslint .",
+    "format": "prettier --write .",
+    "format:check": "prettier --check ."
+  },
+  "devDependencies": {
+    "@eslint/js": "^10.0.1",
+    "@types/node": "^24.13.6",
+    "eslint": "^10.11.0",
+    "prettier": "^3.9.8",
+    "typescript": "^6.0.3",
+    "typescript-eslint": "^8.70.1",
+    "vitest": "^5.0.1"
+  }
+}
