@@ -3,7 +3,23 @@
   "version": "0.0.0",
   "private": true,
   "description": "Detect website migration and production-cutover regressions.",
+  "keywords": [
+    "cli",
+    "website",
+    "migration",
+    "cutover",
+    "seo",
+    "audit"
+  ],
   "license": "MIT",
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/ceit-yoshimoto/sitecutover.git"
+  },
+  "homepage": "https://github.com/ceit-yoshimoto/sitecutover#readme",
+  "bugs": {
+    "url": "https://github.com/ceit-yoshimoto/sitecutover/issues"
+  },
   "type": "module",
   "engines": {
     "node": ">=24"
@@ -11,8 +27,15 @@
   "bin": {
     "sitecutover": "./dist/cli/main.js"
   },
+  "files": [
+    "dist",
+    "LICENSE",
+    "README.md"
+  ],
   "scripts": {
     "build": "tsc -p tsconfig.build.json && chmod +x dist/cli/main.js",
+    "prepack": "npm run build",
+    "pack:check": "npm pack --dry-run",
     "typecheck": "tsc -p tsconfig.json --noEmit",
     "test": "vitest run",
     "test:watch": "vitest",
