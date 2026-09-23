@@ -1,13 +1,35 @@
 import { mapUrl } from '../compare/pair-pages.js';
 import type { Finding } from '../model/finding.js';
-import type { PagePair, PageSnapshot } from '../model/page.js';
+import type { PagePair } from '../model/page.js';
 import { createFinding } from './create-finding.js';
 import type { CheckContext } from './context.js';
+import {
+  isKnownMissingSource,
+  isSourceComparisonBaseline,
+  sourceBaselineFailure,
+} from './source-baseline.js';
 
 export function checkTargetStatus(pair: PagePair, context: CheckContext): Finding[] {
   const source = pair.source;
-  if (source === null || !servesContent(source)) {
+  if (source === null) {
     return [];
+  }
+  if (!isSourceComparisonBaseline(source)) {
+    if (isKnownMissingSource(source)) {
+      return [];
+    }
+    const reason = sourceBaselineFailure(source) ?? 'no HTTP status';
+    return [
+      createFinding({
+        ruleId: 'SC001',
+        severity: 'warning',
+        path: pair.path,
+        sourceUrl: source.requestedUrl,
+        sourceValue: reason,
+        message: `Source page could not be used as a comparison baseline (${reason}).`,
+        help: 'Retry this source URL before treating the target as a migration regression.',
+      }),
+    ];
   }
 
   const sourceUrl = source.requestedUrl;
@@ -57,14 +79,6 @@ export function checkTargetStatus(pair: PagePair, context: CheckContext): Findin
   }
 
   return [];
-}
-
-function servesContent(snapshot: PageSnapshot): boolean {
-  return snapshot.fetchError === null && isSuccessStatus(snapshot.status);
-}
-
-function isSuccessStatus(status: number | null): boolean {
-  return status !== null && status >= 200 && status < 300;
 }
 
 function isUnacceptableStatus(status: number | null): boolean {

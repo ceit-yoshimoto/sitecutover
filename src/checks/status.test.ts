@@ -62,7 +62,7 @@ describe('SC001 target-status', () => {
     ).toBe(503);
   });
 
-  it('reports a target network failure and ignores target-only or unsuccessful source pages', () => {
+  it('reports a target network failure and ignores target-only or already-missing source pages', () => {
     const failed = checkTargetStatus(
       {
         path: '/company/',
@@ -96,6 +96,16 @@ describe('SC001 target-status', () => {
     expect(
       checkTargetStatus(
         {
+          path: '/gone/',
+          source: pageSnapshot({ requestedUrl: 'https://old.example.com/gone/', status: 410 }),
+          target: pageSnapshot({ requestedUrl: 'https://new.example.net/gone/', status: 404 }),
+        },
+        context,
+      ),
+    ).toEqual([]);
+    expect(
+      checkTargetStatus(
+        {
           path: '/only-target/',
           source: null,
           target: pageSnapshot({
@@ -106,5 +116,71 @@ describe('SC001 target-status', () => {
         context,
       ),
     ).toEqual([]);
+  });
+
+  it('warns when a source page cannot be used as a comparison baseline', () => {
+    const cases = [
+      {
+        source: pageSnapshot({
+          requestedUrl: 'https://old.example.com/down/',
+          status: 500,
+        }),
+        reason: 'HTTP 500',
+      },
+      {
+        source: pageSnapshot({
+          requestedUrl: 'https://old.example.com/slow/',
+          status: null,
+          fetchError: { code: 'TIMEOUT', message: 'The request timed out' },
+        }),
+        reason: 'TIMEOUT',
+      },
+      {
+        source: pageSnapshot({
+          requestedUrl: 'https://old.example.com/loop/',
+          status: 302,
+          redirectLoop: true,
+        }),
+        reason: 'redirect loop',
+      },
+      {
+        source: pageSnapshot({
+          requestedUrl: 'https://old.example.com/hops/',
+          status: 302,
+          redirectHopLimitExceeded: true,
+        }),
+        reason: 'redirect hop limit',
+      },
+      {
+        source: pageSnapshot({
+          requestedUrl: 'https://old.example.com/away/',
+          status: null,
+          crossOriginRedirectStopped: true,
+        }),
+        reason: 'cross-origin redirect',
+      },
+    ];
+
+    for (const item of cases) {
+      const findings = checkTargetStatus(
+        {
+          path: '/child/',
+          source: item.source,
+          target: pageSnapshot({
+            requestedUrl: 'https://new.example.net/child/',
+            status: 404,
+          }),
+        },
+        context,
+      );
+      expect(findings).toEqual([
+        expect.objectContaining({
+          ruleId: 'SC001',
+          severity: 'warning',
+          sourceValue: item.reason,
+          message: `Source page could not be used as a comparison baseline (${item.reason}).`,
+        }),
+      ]);
+    }
   });
 });

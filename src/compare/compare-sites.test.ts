@@ -1,6 +1,5 @@
 import type { IncomingMessage, ServerResponse } from 'node:http';
 import { describe, expect, it } from 'vitest';
-import { AuditRuntimeError } from '../model/errors.js';
 import { startLocalServer, type LocalServer } from '../testing/local-http-server.js';
 import { compareSites, type CompareSitesOptions } from './compare-sites.js';
 
@@ -470,9 +469,218 @@ describe('compareSites', () => {
       async (target) => {
         await expect(
           compareSites(options(sourceOrigin, target.origin, { sitemap: false })),
-        ).rejects.toBeInstanceOf(AuditRuntimeError);
+        ).rejects.toThrow(/Source baseline could not be fetched \(ECONNREFUSED\)/);
         expect(targetHits).toBe(0);
       },
     );
   });
+
+  it('starts the audit when the source root returns 200', async () => {
+    let targetHits = 0;
+    await withServer(
+      (request, response) => {
+        send(response, document({ origin: originFrom(request), path: pathnameOf(request) }));
+      },
+      async (source) => {
+        await withServer(
+          (request, response) => {
+            targetHits += 1;
+            send(response, document({ origin: originFrom(request), path: pathnameOf(request) }));
+          },
+          async (target) => {
+            const report = await compareSites(
+              options(source.origin, target.origin, { sitemap: false }),
+            );
+            expect(targetHits).toBeGreaterThan(0);
+            expect(report.summary.pagesExamined).toBe(1);
+            expect(report.findings.filter((finding) => finding.ruleId === 'SC001')).toEqual([]);
+          },
+        );
+      },
+    );
+  });
+
+  it('rejects a non-2xx or failed source root before requesting the target', async () => {
+    await expectSourceRootRejected((response) => {
+      send(response, 'missing', 404);
+    }, 'Source baseline returned HTTP 404.');
+    await expectSourceRootRejected((response) => {
+      send(response, 'down', 500);
+    }, 'Source baseline returned HTTP 500.');
+    await expectSourceRootRejected(
+      () => {
+        return;
+      },
+      'Source baseline could not be fetched (TIMEOUT).',
+      200,
+    );
+    await expectSourceRootRejected((response, request) => {
+      response.writeHead(302, { location: `${originFrom(request)}/` });
+      response.end();
+    }, 'Source baseline stopped on a redirect loop.');
+  });
+
+  it('rejects a cross-origin source redirect without requesting the destination or the target', async () => {
+    let destinationHits = 0;
+    await withServer(
+      (_request, response) => {
+        destinationHits += 1;
+        send(response, 'elsewhere');
+      },
+      async (elsewhere) => {
+        await expectSourceRootRejected((response) => {
+          response.writeHead(302, { location: `${elsewhere.origin}/landed/` });
+          response.end();
+        }, 'Source baseline stopped at a cross-origin redirect.');
+        expect(destinationHits).toBe(0);
+      },
+    );
+  });
+
+  it('keeps unusable source children visible and compares the remaining 2xx pages', async () => {
+    const targetHits = new Map<string, number>();
+    await withServer(
+      (request, response) => {
+        const origin = originFrom(request);
+        const path = pathnameOf(request);
+        if (path === '/') {
+          send(
+            response,
+            document({
+              origin,
+              path,
+              links: [
+                '/live/',
+                '/absent/',
+                '/missing/',
+                '/gone/',
+                '/down/',
+                '/slow/',
+                '/drop/',
+                '/loop/',
+              ],
+            }),
+          );
+          return;
+        }
+        if (path === '/missing/') {
+          send(response, 'missing', 404);
+          return;
+        }
+        if (path === '/gone/') {
+          send(response, 'gone', 410);
+          return;
+        }
+        if (path === '/down/') {
+          send(response, 'down', 500, 'text/plain');
+          return;
+        }
+        if (path === '/slow/') {
+          return;
+        }
+        if (path === '/drop/') {
+          request.socket.destroy();
+          return;
+        }
+        if (path === '/loop/') {
+          response.writeHead(302, { location: `${origin}/loop/` });
+          response.end();
+          return;
+        }
+        send(response, document({ origin, path }));
+      },
+      async (source) => {
+        await withServer(
+          (request, response) => {
+            const path = pathnameOf(request);
+            targetHits.set(path, (targetHits.get(path) ?? 0) + 1);
+            if (path === '/absent/') {
+              send(response, 'missing', 404);
+              return;
+            }
+            send(response, document({ origin: originFrom(request), path }));
+          },
+          async (target) => {
+            const report = await compareSites(
+              options(source.origin, target.origin, { sitemap: false, timeoutMs: 200 }),
+            );
+            expect(report.summary.pagesExamined).toBe(3);
+            expect(report.summary.sourcePages).toBe(9);
+            expect(targetHits.get('/missing/') ?? 0).toBe(0);
+            expect(targetHits.get('/gone/') ?? 0).toBe(0);
+            expect(targetHits.get('/down/') ?? 0).toBe(0);
+            expect(targetHits.get('/slow/') ?? 0).toBe(0);
+            expect(targetHits.get('/drop/') ?? 0).toBe(0);
+            expect(targetHits.get('/loop/') ?? 0).toBe(0);
+            expect(targetHits.get('/live/')).toBe(1);
+            expect(report.findings.filter((finding) => finding.path === '/missing/')).toEqual([]);
+            expect(report.findings.filter((finding) => finding.path === '/gone/')).toEqual([]);
+            expect(report.findings).toEqual(
+              expect.arrayContaining([
+                expect.objectContaining({
+                  ruleId: 'SC001',
+                  severity: 'warning',
+                  path: '/down/',
+                  message: 'Source page could not be used as a comparison baseline (HTTP 500).',
+                }),
+                expect.objectContaining({
+                  ruleId: 'SC001',
+                  severity: 'warning',
+                  path: '/slow/',
+                  sourceValue: 'TIMEOUT',
+                }),
+                expect.objectContaining({
+                  ruleId: 'SC001',
+                  severity: 'warning',
+                  path: '/drop/',
+                  message: expect.stringContaining(
+                    'Source page could not be used as a comparison baseline',
+                  ) as unknown,
+                }),
+                expect.objectContaining({
+                  ruleId: 'SC001',
+                  severity: 'warning',
+                  path: '/loop/',
+                  sourceValue: 'redirect loop',
+                }),
+                expect.objectContaining({
+                  ruleId: 'SC001',
+                  severity: 'error',
+                  path: '/absent/',
+                  targetValue: 404,
+                }),
+              ]),
+            );
+          },
+        );
+      },
+    );
+  });
 });
+
+async function expectSourceRootRejected(
+  respond: (response: ServerResponse, request: IncomingMessage) => void,
+  message: string,
+  timeoutMs = 2_000,
+): Promise<void> {
+  let targetHits = 0;
+  await withServer(
+    (request, response) => {
+      respond(response, request);
+    },
+    async (source) => {
+      await withServer(
+        (_request, response) => {
+          targetHits += 1;
+          send(response, document({ origin: originFrom(_request), path: '/' }));
+        },
+        async (target) => {
+          await expect(
+            compareSites(options(source.origin, target.origin, { sitemap: false, timeoutMs })),
+          ).rejects.toThrow(message);
+          expect(targetHits).toBe(0);
+        },
+      );
+    },
+  );
+}

@@ -40,7 +40,7 @@ Validate inputs before network access.
 
 - `0`: audit completed and did not meet the configured failure threshold. Info findings alone do not meet `error` or `warning`.
 - `1`: audit completed and findings met the failure threshold. `--fail-on error` fails when there is at least one error. `--fail-on warning` fails when there is at least one warning or error. `--fail-on never` stays `0`.
-- `2`: invalid configuration, usage error, report file write failure, or a runtime failure that cannot produce an audit. A source root that cannot be fetched is this case, because there is no comparison baseline. A target 404, or a target request failure that can be recorded as a finding, stays in the audit and uses `0` or `1`.
+- `2`: invalid configuration, usage error, report file write failure, or a runtime failure that cannot produce an audit. A source root that is not a usable 2xx baseline is this case, including a fetch error, a non-2xx status, a redirect loop, the redirect hop limit, or a cross-origin redirect stop. A target 404, or a target request failure that can be recorded as a finding, stays in the audit and uses `0` or `1`.
 
 Do not use many rule-specific exit codes.
 
@@ -50,14 +50,14 @@ Comparison is source-driven. Network phases run one after another, so `--concurr
 
 1. Validate configuration before any request.
 2. Crawl the source origin from its root, following same-origin links until `--max-pages`.
-3. Stop when the source root itself cannot be fetched. That is exit `2`, not a finding.
-4. Map each fetched source URL onto the target origin. Path and query stay the same.
+3. Stop when the source root is not a usable baseline. A usable baseline is a final `2xx` response with no fetch error, redirect loop, redirect hop limit, or cross-origin redirect stop. HTTP 404, 410, 5xx, a missing status, and those redirect failures are exit `2`, not findings, and the target is not requested.
+4. Map each usable source URL onto the target origin. Path and query stay the same. A source URL that is not a usable baseline is not seeded on the target.
 5. Crawl the target origin. Its root and the mapped source URLs are seeds. They are deduplicated and fetched before links discovered only on the target. A mapped URL is fetched even when the target home page does not link it. A URL already fetched is not fetched again.
 6. Any crawl budget still left may follow target-only links. Those pages are not paired for SC001–SC006.
-7. Pair each source page with its mapped target snapshot. A failed target fetch stays in the pair.
+7. Pair each usable source page with its mapped target snapshot. A failed target fetch stays in the pair. A source page that already returned 404 or 410 is omitted: it is not a migration regression. Any other source page that could not be used as a baseline produces an SC001 warning and is not compared with the target.
 8. Run SC007 on the target crawl. Run SC008 unless `--no-sitemap`. `--no-sitemap` does not request `robots.txt` or sitemap URLs.
 
-`pagesExamined` is the number of source-driven page pairs evaluated by SC001–SC006. `sourcePages` and `targetPages` are the numbers of pages each crawl fetched.
+`pagesExamined` is the number of source pages evaluated by SC001–SC006 because their final response is a usable 2xx baseline. `sourcePages` is the number of source page snapshots the crawl attempted, including pages that were not usable baselines. `targetPages` is the number of target page snapshots the crawl attempted.
 
 Sitemap coverage remains a separate fetch. It does not add sitemap URLs to the HTML crawl. Target-only sitemap differences are still reportable through SC008.
 
@@ -108,13 +108,17 @@ Metadata and links are parsed with a standards HTML parser, and only from `text/
 
 **Error** when a source page that successfully serves content does not have an acceptable target page.
 
+A source page is a comparison baseline only when its final response is `2xx`, the request has no fetch error, and it did not stop on a redirect loop, the redirect hop limit, or a cross-origin redirect.
+
 Minimum behavior:
 
 - source `2xx` + target `404/410/5xx` => error
 - network failure on target => error
-- source missing pages should not automatically become target regressions
+- source `404/410` => omitted. The source page is already missing, so it is not a target regression.
+- source fetch error, `5xx`, redirect loop, redirect hop limit, cross-origin redirect stop, or another non-2xx status => SC001 warning, `Source page could not be used as a comparison baseline`. These pages are not compared with the target.
+- the source root itself must be a comparison baseline. Otherwise the audit stops before any target request.
 
-Report both statuses and URLs.
+Report both statuses and URLs when a baseline page is compared.
 
 ### SC002 — redirect-chain
 

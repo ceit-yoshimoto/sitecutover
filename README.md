@@ -131,6 +131,8 @@ Node.js 24 or newer is required (`.nvmrc`).
 Current library rules:
 
 - `--from` and `--to` must be origin roots such as `https://example.com/`. A path or query is rejected.
+- The source root must finish as HTTP 2xx. A fetch error, non-2xx status, redirect loop, hop limit, or cross-origin redirect stops the audit before the target is requested.
+- A source child that returns 404 or 410 is omitted. Other source pages that cannot be compared produce an SC001 warning. `pagesExamined` counts only usable 2xx source pages.
 - Same-origin redirects are followed. A cross-origin `Location`, including loopback and private addresses, is recorded and not requested.
 - `/a//b` and `/a/b` stay distinct.
 - HTML metadata and links are parsed from `text/html` and `application/xhtml+xml` only.

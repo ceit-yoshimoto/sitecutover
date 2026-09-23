@@ -153,7 +153,7 @@ Never serialize secrets into configuration fields.
 
 ### Starting URLs
 
-`compareSites()` crawls the source site first, then the target site. The target crawl is seeded with its root and every source URL mapped onto the target origin, before it follows links found only on the target. That keeps a source page from being reported missing when the target has the URL but does not link it from the home page. Target-only pages are not paired for SC001–SC006.
+`compareSites()` crawls the source site first, then the target site. The source root must finish as a successful 2xx response before the target crawl starts. The target crawl is seeded with its root and every usable source URL mapped onto the target origin, before it follows links found only on the target. That keeps a source page from being reported missing when the target has the URL but does not link it from the home page. Target-only pages are not paired for SC001–SC006. A source child that is already 404 or 410 is omitted. Any other source child that cannot be used as a baseline is an SC001 warning.
 
 The phases do not overlap, so the configured concurrency is the simultaneous request limit.
 

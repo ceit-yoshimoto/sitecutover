@@ -3,9 +3,15 @@ import { DEFAULT_MAX_SITEMAPS } from '../crawl/limits.js';
 import { mapUrl, pathKeyForUrl } from './pair-pages.js';
 import { checkPagePair } from '../checks/check-page.js';
 import { auditInternalLinks } from '../checks/internal-links.js';
+import { checkTargetStatus } from '../checks/status.js';
+import {
+  isKnownMissingSource,
+  isSourceComparisonBaseline,
+  sourceRootBaselineMessage,
+} from '../checks/source-baseline.js';
 import { AuditRuntimeError } from '../model/errors.js';
 import type { Finding } from '../model/finding.js';
-import { copyPagePair, type PagePair, type PageSnapshot } from '../model/page.js';
+import { copyPagePair, type PageSnapshot } from '../model/page.js';
 import {
   createAuditReport,
   normalizeAuditConfig,
@@ -32,8 +38,9 @@ export interface CompareSitesOptions {
 
 /**
  * Source-driven site comparison.
- * `pagesExamined` is the number of source pages paired for SC001–SC006.
- * `sourcePages` and `targetPages` are the numbers of pages each crawl fetched.
+ * `pagesExamined` is the number of source pages whose final response is a 2xx baseline
+ * and were evaluated by SC001–SC006.
+ * `sourcePages` and `targetPages` are the numbers of page snapshots each crawl attempted.
  */
 export async function compareSites(options: CompareSitesOptions): Promise<AuditReport> {
   const now = options.now ?? ((): Date => new Date());
@@ -73,11 +80,32 @@ export async function compareSites(options: CompareSitesOptions): Promise<AuditR
     seedUrls: mappedTargetUrls(source, config.targetRoot),
   });
 
-  const pairs = sourceDrivenPairs(source, target, config.targetRoot);
   const context = { sourceOrigin: config.sourceOrigin, targetOrigin: config.targetOrigin };
   const findings: Finding[] = [];
-  for (const pair of pairs) {
-    findings.push(...checkPagePair(pair, context));
+  let pagesExamined = 0;
+  for (const page of source.pages) {
+    const path = pathKeyForUrl(page.snapshot.requestedUrl);
+    if (path === null || isKnownMissingSource(page.snapshot)) {
+      continue;
+    }
+    if (!isSourceComparisonBaseline(page.snapshot)) {
+      findings.push(
+        ...checkTargetStatus(copyPagePair({ path, source: page.snapshot, target: null }), context),
+      );
+      continue;
+    }
+    pagesExamined += 1;
+    const mapped = mapUrl(page.snapshot.requestedUrl, config.targetRoot);
+    findings.push(
+      ...checkPagePair(
+        copyPagePair({
+          path,
+          source: page.snapshot,
+          target: mapped === null ? null : (targetSnapshot(target, mapped) ?? null),
+        }),
+        context,
+      ),
+    );
   }
   findings.push(
     ...(await auditInternalLinks(target.pages, {
@@ -101,7 +129,7 @@ export async function compareSites(options: CompareSitesOptions): Promise<AuditR
   return createAuditReport({
     version: options.version,
     config,
-    pagesExamined: pairs.length,
+    pagesExamined,
     sourcePages: source.pages.length,
     targetPages: target.pages.length,
     findings,
@@ -112,10 +140,8 @@ export async function compareSites(options: CompareSitesOptions): Promise<AuditR
 
 function assertSourceBaseline(source: CrawlResult): void {
   const root = source.pages[0];
-  if (root === undefined || root.snapshot.fetchError !== null) {
-    const code = root?.snapshot.fetchError?.code;
-    const suffix = code === undefined ? '' : ` (${code})`;
-    throw new AuditRuntimeError(`Source baseline could not be fetched${suffix}.`);
+  if (root === undefined || !isSourceComparisonBaseline(root.snapshot)) {
+    throw new AuditRuntimeError(sourceRootBaselineMessage(root?.snapshot));
   }
 }
 
@@ -123,6 +149,9 @@ function mappedTargetUrls(source: CrawlResult, targetRoot: string): string[] {
   const urls: string[] = [];
   const seen = new Set<string>();
   for (const page of source.pages) {
+    if (!isSourceComparisonBaseline(page.snapshot)) {
+      continue;
+    }
     const mapped = mapUrl(page.snapshot.requestedUrl, targetRoot);
     if (mapped === null || seen.has(mapped)) {
       continue;
@@ -133,32 +162,11 @@ function mappedTargetUrls(source: CrawlResult, targetRoot: string): string[] {
   return urls;
 }
 
-function sourceDrivenPairs(
-  source: CrawlResult,
-  target: CrawlResult,
-  targetRoot: string,
-): PagePair[] {
-  const targetByUrl = new Map<string, PageSnapshot>();
+function targetSnapshot(target: CrawlResult, url: string): PageSnapshot | undefined {
   for (const page of target.pages) {
-    if (!targetByUrl.has(page.snapshot.requestedUrl)) {
-      targetByUrl.set(page.snapshot.requestedUrl, page.snapshot);
+    if (page.snapshot.requestedUrl === url) {
+      return page.snapshot;
     }
   }
-
-  const pairs: PagePair[] = [];
-  for (const page of source.pages) {
-    const path = pathKeyForUrl(page.snapshot.requestedUrl);
-    if (path === null) {
-      continue;
-    }
-    const mapped = mapUrl(page.snapshot.requestedUrl, targetRoot);
-    pairs.push(
-      copyPagePair({
-        path,
-        source: page.snapshot,
-        target: mapped === null ? null : (targetByUrl.get(mapped) ?? null),
-      }),
-    );
-  }
-  return pairs;
+  return undefined;
 }
