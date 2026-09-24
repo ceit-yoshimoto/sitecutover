@@ -1,10 +1,10 @@
 # v0.1.0 release checklist
 
-This checklist is for the first public release. The package stays `private: true` at version `0.0.0` until every item below is done. Do not publish, tag, or create a GitHub Release early.
+This checklist is for the first public release. The release commit sets version `0.1.0` and `"private": false`. Do not publish, tag, or create a GitHub Release until the remaining Publish items are done.
 
 ## Before tagging
 
-- [ ] CI on `main` is green
+- [x] CI on `main` is green
 - [x] `npm run typecheck`, `npm test`, `npm run lint`, `npm run format:check`, and `npm run build` pass on Node.js 24
 - [x] `npm run pack:check` shows only `package.json`, `README.md`, `LICENSE`, and `dist/`
 - [x] A local tarball install runs `sitecutover --help` and `sitecutover compare --help`
@@ -22,8 +22,8 @@ This checklist is for the first public release. The package stays `private: true
 
 ## Publish
 
-- [ ] Set `"version": "0.1.0"`
-- [ ] Set `"private": false`
+- [x] Set `"version": "0.1.0"`
+- [x] Set `"private": false`
 - [ ] Confirm the npm name `sitecutover` is available
 - [ ] `npm publish` from the reviewed commit
 - [ ] Tag `v0.1.0` on that commit

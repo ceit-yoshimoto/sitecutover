@@ -1,7 +1,7 @@
 {
   "name": "sitecutover",
-  "version": "0.0.0",
-  "private": true,
+  "version": "0.1.0",
+  "private": false,
   "description": "Detect website migration and production-cutover regressions.",
   "keywords": [
     "cli",

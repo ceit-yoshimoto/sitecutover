@@ -2,7 +2,7 @@
 
 > Catch website migration regressions before they become production incidents.
 
-**Status:** v0.1.0 release candidate for local dogfooding. Not published to npm. The package remains private at version `0.0.0`.
+**Status:** v0.1.0 is prepared for release and is not published to npm yet.
 
 `sitecutover` is an open-source CLI for auditing website migrations, redesigns, CMS moves, domain changes, and production cutovers.
 
@@ -75,7 +75,7 @@ Other defaults: `--max-pages 250`, `--concurrency 5`, `--timeout 15000`.
 Console output looks like this:
 
 ```text
-sitecutover 0.0.0
+sitecutover 0.1.0
 
 Source: https://old.example.com
 Target: https://new.example.com
