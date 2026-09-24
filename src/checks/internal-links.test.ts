@@ -209,6 +209,38 @@ describe('auditInternalLinks', () => {
     );
   });
 
+  it('does not use an error document as an internal-link referrer', async () => {
+    await withServer(
+      (request, response) => {
+        const path = pathnameOf(request);
+        if (path === '/') {
+          htmlResponse(response, `${link('/live')}${link('/gone')}${link('/missing')}`);
+          return;
+        }
+        if (path === '/live') {
+          htmlResponse(response, link('/missing'));
+          return;
+        }
+        if (path === '/gone' || path === '/missing') {
+          htmlResponse(response, `${link('/missing')}${link('/other-broken')}`, 404);
+          return;
+        }
+        htmlResponse(response, '<p>missing</p>', 404);
+      },
+      async (server) => {
+        const crawl = await crawled(server, 10);
+        const findings = await auditInternalLinks(crawl.pages, auditOptions());
+        const missing = findings.find((finding) => finding.path === '/missing');
+
+        expect(missing).toMatchObject({
+          severity: 'error',
+          referrers: [`${server.origin}/`, `${server.origin}/live`],
+        });
+        expect(findings.some((finding) => finding.path === '/other-broken')).toBe(false);
+      },
+    );
+  });
+
   it('does not fetch external links or a cross-origin redirect target', async () => {
     let externalHits = 0;
     const external = await startLocalServer((_request, response) => {

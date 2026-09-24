@@ -113,7 +113,8 @@ A target `404`, or a target request failure that can be recorded as a finding, s
 - The source root must finish as HTTP `2xx`. Otherwise the audit stops before the target is requested.
 - A source child that returns `404` or `410` is omitted. Other source pages that cannot be compared produce an SC001 warning.
 - `pagesExamined` counts usable `2xx` source pages. `sourcePages` and `targetPages` count crawl attempts.
-- HTML metadata and links are parsed from `text/html` and `application/xhtml+xml` only.
+- HTML metadata and links are parsed from `text/html` and `application/xhtml+xml` only. SC003–SC006 run only when that target response is a successful `2xx` page.
+- A target `401` or `403`, like any other final non-2xx status, is an SC001 error when the source page is a usable `2xx` baseline. Redirect failures stay on SC002.
 - `/a//b` and `/a/b` stay distinct.
 - No browser automation, authentication headers, or visual diff.
 

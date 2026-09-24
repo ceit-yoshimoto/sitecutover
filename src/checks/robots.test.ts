@@ -46,6 +46,37 @@ describe('SC004 indexing-directives', () => {
     expect(
       checkIndexingDirectives({
         path: '/company/',
+        source: pageSnapshot({ requestedUrl: 'https://old.example.com/company/' }),
+        target: pageSnapshot({
+          requestedUrl: 'https://new.example.net/company/',
+          metaRobots: 'index, follow',
+        }),
+      }),
+    ).toEqual([]);
+    expect(
+      checkIndexingDirectives({
+        path: '/company/',
+        source: pageSnapshot({
+          requestedUrl: 'https://old.example.com/company/',
+          metaRobots: 'all',
+        }),
+        target: pageSnapshot({ requestedUrl: 'https://new.example.net/company/' }),
+      }),
+    ).toEqual([]);
+    expect(
+      checkIndexingDirectives({
+        path: '/company/',
+        source: pageSnapshot({
+          requestedUrl: 'https://old.example.com/company/',
+          metaRobots: 'max-image-preview:large',
+        }),
+        target: pageSnapshot({ requestedUrl: 'https://new.example.net/company/' }),
+      }),
+    ).toMatchObject([{ ruleId: 'SC004', severity: 'warning' }]);
+
+    expect(
+      checkIndexingDirectives({
+        path: '/company/',
         source: pageSnapshot({
           requestedUrl: 'https://old.example.com/company/',
           metaRobots: 'noindex',

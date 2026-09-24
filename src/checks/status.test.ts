@@ -60,6 +60,24 @@ describe('SC001 target-status', () => {
         context,
       )[0]?.targetValue,
     ).toBe(503);
+    expect(
+      checkTargetStatus(
+        pair('https://old.example.com/company/', 'https://new.example.net/company/', 401),
+        context,
+      )[0],
+    ).toMatchObject({ severity: 'error', targetValue: 401 });
+    expect(
+      checkTargetStatus(
+        pair('https://old.example.com/company/', 'https://new.example.net/company/', 403),
+        context,
+      )[0],
+    ).toMatchObject({ severity: 'error', targetValue: 403 });
+    expect(
+      checkTargetStatus(
+        pair('https://old.example.com/company/', 'https://new.example.net/company/', 400),
+        context,
+      )[0]?.targetValue,
+    ).toBe(400);
   });
 
   it('reports a target network failure and ignores target-only or already-missing source pages', () => {
@@ -111,6 +129,37 @@ describe('SC001 target-status', () => {
           target: pageSnapshot({
             requestedUrl: 'https://new.example.net/only-target/',
             status: 404,
+          }),
+        },
+        context,
+      ),
+    ).toEqual([]);
+  });
+
+  it('leaves redirect failures to SC002', () => {
+    expect(
+      checkTargetStatus(
+        {
+          path: '/loop/',
+          source: pageSnapshot({ requestedUrl: 'https://old.example.com/loop/', status: 200 }),
+          target: pageSnapshot({
+            requestedUrl: 'https://new.example.net/loop/',
+            status: 302,
+            redirectLoop: true,
+          }),
+        },
+        context,
+      ),
+    ).toEqual([]);
+    expect(
+      checkTargetStatus(
+        {
+          path: '/away/',
+          source: pageSnapshot({ requestedUrl: 'https://old.example.com/away/', status: 200 }),
+          target: pageSnapshot({
+            requestedUrl: 'https://new.example.net/away/',
+            status: null,
+            crossOriginRedirectStopped: true,
           }),
         },
         context,

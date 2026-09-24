@@ -1,6 +1,6 @@
 import { mapUrl } from '../compare/pair-pages.js';
 import type { Finding } from '../model/finding.js';
-import type { PagePair } from '../model/page.js';
+import type { PagePair, PageSnapshot } from '../model/page.js';
 import { createFinding } from './create-finding.js';
 import type { CheckContext } from './context.js';
 import {
@@ -66,7 +66,11 @@ export function checkTargetStatus(pair: PagePair, context: CheckContext): Findin
     ];
   }
 
-  if (isUnacceptableStatus(pair.target.status)) {
+  if (isRedirectDiagnostic(pair.target)) {
+    return [];
+  }
+
+  if (!isSuccessStatus(pair.target.status)) {
     return [
       createFinding({
         ...shared,
@@ -81,8 +85,16 @@ export function checkTargetStatus(pair: PagePair, context: CheckContext): Findin
   return [];
 }
 
-function isUnacceptableStatus(status: number | null): boolean {
-  return status === 404 || status === 410 || (status !== null && status >= 500 && status <= 599);
+function isRedirectDiagnostic(snapshot: PageSnapshot): boolean {
+  return (
+    snapshot.redirectLoop ||
+    snapshot.redirectHopLimitExceeded ||
+    snapshot.crossOriginRedirectStopped
+  );
+}
+
+function isSuccessStatus(status: number | null): boolean {
+  return status !== null && status >= 200 && status < 300;
 }
 
 function formatStatus(status: number | null): string {

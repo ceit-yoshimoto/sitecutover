@@ -656,6 +656,42 @@ describe('compareSites', () => {
       },
     );
   });
+
+  it('reports only SC001 when the target error document has metadata and a self link', async () => {
+    await withServer(
+      (request, response) => {
+        const origin = originFrom(request);
+        const path = pathnameOf(request);
+        send(response, document({ origin, path, links: path === '/' ? ['/old-page/'] : [] }));
+      },
+      async (source) => {
+        await withServer(
+          (request, response) => {
+            const origin = originFrom(request);
+            const path = pathnameOf(request);
+            if (path === '/old-page/') {
+              send(
+                response,
+                `<!doctype html><html><head><title>Not Found</title><meta name="description" content="Missing page"><meta name="robots" content="noindex"><link rel="canonical" href="${origin}/old-page/"></head><body><a href="/old-page/">self</a></body></html>`,
+                404,
+              );
+              return;
+            }
+            send(response, document({ origin, path }));
+          },
+          async (target) => {
+            const report = await compareSites(
+              options(source.origin, target.origin, { sitemap: false }),
+            );
+            const forPage = report.findings.filter((finding) => finding.path === '/old-page/');
+            expect(forPage.map((finding) => `${finding.ruleId}:${finding.severity}`)).toEqual([
+              'SC001:error',
+            ]);
+          },
+        );
+      },
+    );
+  });
 });
 
 async function expectSourceRootRejected(

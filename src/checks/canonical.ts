@@ -4,11 +4,11 @@ import type { Finding } from '../model/finding.js';
 import type { PagePair } from '../model/page.js';
 import { createFinding } from './create-finding.js';
 import type { CheckContext } from './context.js';
-import { isHtmlDocument } from './html.js';
+import { isUsableTargetHtml } from './html.js';
 
 export function checkCanonical(pair: PagePair, context: CheckContext): Finding[] {
   const target = pair.target;
-  if (target === null || !isHtmlDocument(target)) {
+  if (target === null || !isUsableTargetHtml(target)) {
     return [];
   }
 

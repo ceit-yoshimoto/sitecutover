@@ -13,6 +13,7 @@ import type { JsonObject } from '../model/json.js';
 import type { PageSnapshot } from '../model/page.js';
 import { sampleUncheckedUrls } from '../model/unchecked-urls.js';
 import { createFinding } from './create-finding.js';
+import { isSuccessfulTargetResponse } from './html.js';
 
 export interface InternalLinkTarget {
   url: string;
@@ -135,6 +136,9 @@ function uncheckedLinksFinding(fetchBudget: number, unchecked: readonly string[]
 function collectInternalLinks(pages: readonly CrawlPage[]): Map<string, string[]> {
   const grouped = new Map<string, string[]>();
   for (const page of pages) {
+    if (!isSuccessfulTargetResponse(page.snapshot)) {
+      continue;
+    }
     const referrer = page.snapshot.requestedUrl;
     for (const link of page.snapshot.internalLinks) {
       const referrers = grouped.get(link);

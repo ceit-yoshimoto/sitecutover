@@ -2,11 +2,11 @@ import type { Finding } from '../model/finding.js';
 import type { JsonValue } from '../model/json.js';
 import type { PagePair, PageSnapshot } from '../model/page.js';
 import { createFinding } from './create-finding.js';
-import { isHtmlDocument } from './html.js';
+import { isHtmlDocument, isUsableTargetHtml } from './html.js';
 
 export function checkIndexingDirectives(pair: PagePair): Finding[] {
   const target = pair.target;
-  if (target === null) {
+  if (target === null || !isUsableTargetHtml(target)) {
     return [];
   }
 
@@ -82,7 +82,7 @@ function otherDirectivesDiffer(
   sourceTokens: readonly string[],
   targetTokens: readonly string[],
 ): boolean {
-  const ignore = new Set(['index', 'noindex', 'none']);
+  const ignore = new Set(['all', 'follow', 'index', 'noindex', 'none']);
   return (
     join(sourceTokens.filter((token) => !ignore.has(token))) !==
     join(targetTokens.filter((token) => !ignore.has(token)))

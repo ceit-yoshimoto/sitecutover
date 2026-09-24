@@ -112,8 +112,9 @@ A source page is a comparison baseline only when its final response is `2xx`, th
 
 Minimum behavior:
 
-- source `2xx` + target `404/410/5xx` => error
+- source `2xx` + target final status other than `2xx`, including `401`, `403`, `404`, `410`, and `5xx` => error
 - network failure on target => error
+- a target redirect loop, hop-limit stop, or cross-origin redirect stop stays on SC002 and is not also SC001
 - source `404/410` => omitted. The source page is already missing, so it is not a target regression.
 - source fetch error, `5xx`, redirect loop, redirect hop limit, cross-origin redirect stop, or another non-2xx status => SC001 warning, `Source page could not be used as a comparison baseline`. These pages are not compared with the target.
 - the source root itself must be a comparison baseline. Otherwise the audit stops before any target request.
@@ -135,7 +136,7 @@ Always retain enough trace data to debug the chain.
 
 ### SC003 — canonical
 
-For HTML pages:
+For usable target HTML only. The target response must be `text/html` or `application/xhtml+xml`, with a final `2xx` status, no fetch error, and no redirect loop, hop-limit stop, or cross-origin redirect stop. An error document, including a `404` template, does not produce SC003–SC006.
 
 - canonical points to source/old host on target => error
 - canonical missing when source had one => warning
@@ -153,7 +154,7 @@ Inspect both:
 
 Target containing `noindex` when source was indexable => error.
 
-Other directive differences may be warnings.
+`index`, `follow`, and `all` are unrestricted defaults. They compare as if they were absent. Restrictive and serving directives, including `noindex`, `nofollow`, `none`, `nosnippet`, and `max-image-preview`, still compare. Other directive differences may be warnings.
 
 ### SC005 — title
 
@@ -170,7 +171,7 @@ The report should show source and target values.
 
 ### SC007 — internal-link-status
 
-For internal links discovered on the target:
+For internal links discovered on successful target pages. A page counts as a referrer only when its final status is `2xx` and the fetch did not fail or stop on a redirect loop, hop limit, or cross-origin redirect. Links that appear only inside an error document are not referrers. A successful page that links to a `404` still produces SC007. The `404` URL itself remains a valid link target.
 
 - linked URL resolving to `404/410/5xx` => error
 - redirect chain > 1 hop => warning

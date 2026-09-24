@@ -19,7 +19,7 @@ This checklist is for the first public release. The package stays `private: true
 Confirm these on a real site before calling the release done. They are not new features for the candidate.
 
 - [ ] SVG `<foreignObject>` and other SVG subtree markup: the HTML parser currently does not treat SVG contents as HTML elements, so links inside an SVG subtree are not crawled. Decide whether that should stay.
-- [ ] Target `401` / `403`: SC001 does not treat these as errors. A source `2xx` page whose target answers `401` or `403` can finish with no SC001 finding. Decide whether that is the right migration signal.
+- [x] Target `401` / `403`: a source `2xx` page whose target answers `401`, `403`, or another final non-2xx status is an SC001 error. Redirect loop, hop limit, and cross-origin redirect stops stay on SC002.
 - [ ] Target cross-origin redirect: the redirect `Location` is not requested. SC002 currently reports that stop as a warning. Decide whether warning remains the right severity.
 
 ## Publish
