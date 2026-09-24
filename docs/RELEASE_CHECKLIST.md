@@ -1,6 +1,6 @@
 # v0.1.0 release checklist
 
-This checklist is for the first public release. The release commit sets version `0.1.0` and `"private": false`. Do not publish, tag, or create a GitHub Release until the remaining Publish items are done.
+This checklist records the first public release. The `v0.1.0` tag stays on the release commit. Later checklist commits do not move that tag.
 
 ## Before tagging
 
@@ -24,8 +24,8 @@ This checklist is for the first public release. The release commit sets version 
 
 - [x] Set `"version": "0.1.0"`
 - [x] Set `"private": false`
-- [ ] Confirm the npm name `sitecutover` is available
-- [ ] `npm publish` from the reviewed commit
-- [ ] Tag `v0.1.0` on that commit
-- [ ] Create the GitHub Release from that tag
-- [ ] From a clean machine or temporary directory, install the published package and run `sitecutover --help` and `sitecutover --version`
+- [x] Confirm the npm name `sitecutover` is available
+- [x] `npm publish` from the reviewed commit
+- [x] Tag `v0.1.0` on that commit
+- [x] Create the GitHub Release from that tag
+- [x] From a clean machine or temporary directory, install the published package and run `sitecutover --help` and `sitecutover --version`
