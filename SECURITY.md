@@ -14,7 +14,7 @@ Never include real credentials, authorization headers, cookies, private staging 
 
 ## Project security principles
 
-- Audit operations should use safe read-only requests.
+- Audit operations use unauthenticated `GET` requests. v0.1 does not send `Authorization`, `Cookie`, or Basic Auth, and it rejects URLs that embed a username or password.
 - Form submission and state-changing actions are out of scope for the core crawler.
 - Secrets must never be written to reports or logs.
 - If custom headers are added in a future release, sensitive values must be redacted from diagnostics.

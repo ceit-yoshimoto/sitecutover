@@ -94,13 +94,13 @@ Dot segments follow the WHATWG URL parser.
 
 Same-origin redirects are followed up to the hop limit.
 
-A `Location` with a different origin is not requested. The received hop and the unfetched `Location` stay on the trace, and SC002 reports that stop. This includes redirects to loopback, link-local, and private addresses, and redirects that change scheme, host, or port.
+A `Location` with a different origin is not requested. The received hop and the unfetched `Location` stay on the trace. SC002 reports that stop as a warning. SC001 does not report the same redirect. This includes redirects to loopback, link-local, and private addresses, and redirects that change scheme, host, or port.
 
 The document behind a cross-origin redirect is not crawled in v0.1.
 
 ## HTML parsing
 
-Metadata and links are parsed with a standards HTML parser, and only from `text/html` or `application/xhtml+xml` responses. XML, plain text, and responses with no content type are not treated as HTML. Script and style contents are not executed or scanned as markup. SVG contents are not treated as HTML elements.
+Metadata and links are parsed with a standards HTML parser, and only from `text/html` or `application/xhtml+xml` responses. XML, plain text, and responses with no content type are not treated as HTML. Script and style contents are not executed or scanned as markup. SVG contents, including links inside an SVG subtree or `<foreignObject>`, are not treated as HTML elements and are not crawled in v0.1.
 
 ## Rules
 
@@ -130,7 +130,7 @@ Findings:
 - redirect loop => error
 - redirect exceeds hop limit => error
 - redirect chain longer than one hop => warning (initial default)
-- redirect ending on unexpected external origin => warning/error based on safety policy
+- redirect ending on another origin => warning. The `Location` is kept and not requested. This is not also an SC001 error.
 
 Always retain enough trace data to debug the chain.
 
@@ -154,7 +154,7 @@ Inspect both:
 
 Target containing `noindex` when source was indexable => error.
 
-`index`, `follow`, and `all` are unrestricted defaults. They compare as if they were absent. Restrictive and serving directives, including `noindex`, `nofollow`, `none`, `nosnippet`, and `max-image-preview`, still compare. Other directive differences may be warnings.
+`index`, `follow`, and `all` are unrestricted defaults. They compare as if they were absent. Restrictive and serving directives, including `noindex`, `nofollow`, `none`, `nosnippet`, and `max-image-preview`, still compare. Other directive differences may be warnings. v0.1 does not ignore extra serving directives such as `max-snippet` or `max-video-preview`. Narrowing that comparison is deferred.
 
 ### SC005 — title
 

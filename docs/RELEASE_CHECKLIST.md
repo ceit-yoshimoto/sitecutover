@@ -5,22 +5,20 @@ This checklist is for the first public release. The package stays `private: true
 ## Before tagging
 
 - [ ] CI on `main` is green
-- [ ] `npm run typecheck`, `npm test`, `npm run lint`, `npm run format:check`, and `npm run build` pass on Node.js 24
-- [ ] `npm run pack:check` shows only `package.json`, `README.md`, `LICENSE`, and `dist/`
-- [ ] A local tarball install runs `sitecutover --help` and `sitecutover compare --help`
-- [ ] Dogfood on at least one real source/target pair is complete
-- [ ] Dogfood results are reviewed. Report files stay out of git (`reports/` is ignored)
-- [ ] README matches the shipped command, defaults, and constraints
-- [ ] SECURITY.md still matches the read-only behavior, and the repo has no credentials or private client data
-- [ ] `package.json` metadata is final: description, license, repository, homepage, bugs, bin, engines, files, keywords
+- [x] `npm run typecheck`, `npm test`, `npm run lint`, `npm run format:check`, and `npm run build` pass on Node.js 24
+- [x] `npm run pack:check` shows only `package.json`, `README.md`, `LICENSE`, and `dist/`
+- [x] A local tarball install runs `sitecutover --help` and `sitecutover compare --help`
+- [x] Dogfood on at least one real source/target pair is complete
+- [x] Dogfood results are reviewed. Report files stay out of git (`reports/` is ignored)
+- [x] README matches the shipped command, defaults, and constraints
+- [x] SECURITY.md still matches the read-only behavior, and the repo has no credentials or private client data
+- [x] `package.json` metadata is final: description, license, repository, homepage, bugs, bin, engines, files, keywords
 
-## Dogfood questions still open
+## Dogfood decisions
 
-Confirm these on a real site before calling the release done. They are not new features for the candidate.
-
-- [ ] SVG `<foreignObject>` and other SVG subtree markup: the HTML parser currently does not treat SVG contents as HTML elements, so links inside an SVG subtree are not crawled. Decide whether that should stay.
+- [x] SVG `<foreignObject>` and other SVG subtree markup: v0.1 does not crawl links inside an SVG subtree. This is a documented constraint, not a parser change for this release.
 - [x] Target `401` / `403`: a source `2xx` page whose target answers `401`, `403`, or another final non-2xx status is an SC001 error. Redirect loop, hop limit, and cross-origin redirect stops stay on SC002.
-- [ ] Target cross-origin redirect: the redirect `Location` is not requested. SC002 currently reports that stop as a warning. Decide whether warning remains the right severity.
+- [x] Target cross-origin redirect: record the `Location`, do not request the other origin, report SC002 as a warning, and do not also report SC001. The severity stays a warning.
 
 ## Publish
 

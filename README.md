@@ -109,14 +109,16 @@ A target `404`, or a target request failure that can be recorded as a finding, s
 
 - Read-only `GET` requests. The tool does not submit forms or change the site.
 - `--from` and `--to` are origin roots only. There is no path remapping.
-- A cross-origin redirect is not requested.
+- A cross-origin redirect is recorded and not requested. SC002 reports that stop as a warning, and SC001 does not report it again.
+- Links inside an SVG subtree, including `<foreignObject>`, are not crawled in v0.1.
+- Authentication is not supported. The audit does not send `Authorization`, `Cookie`, or Basic Auth. A URL with an embedded username or password is rejected.
 - The source root must finish as HTTP `2xx`. Otherwise the audit stops before the target is requested.
 - A source child that returns `404` or `410` is omitted. Other source pages that cannot be compared produce an SC001 warning.
 - `pagesExamined` counts usable `2xx` source pages. `sourcePages` and `targetPages` count crawl attempts.
 - HTML metadata and links are parsed from `text/html` and `application/xhtml+xml` only. SC003–SC006 run only when that target response is a successful `2xx` page.
 - A target `401` or `403`, like any other final non-2xx status, is an SC001 error when the source page is a usable `2xx` baseline. Redirect failures stay on SC002.
 - `/a//b` and `/a/b` stay distinct.
-- No browser automation, authentication headers, or visual diff.
+- No browser automation or visual diff.
 
 See [`docs/MVP_SPEC.md`](docs/MVP_SPEC.md) for the rule contract and [`docs/RELEASE_CHECKLIST.md`](docs/RELEASE_CHECKLIST.md) for what remains before `0.1.0`.
 
